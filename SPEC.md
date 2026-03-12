@@ -102,6 +102,7 @@ Requirements:
 - Cache recent place lookups locally.
 - Deduplicate similar insights for the same area.
 - Gracefully degrade when network access is unavailable.
+- Distinguish location permission failures from "no location fix yet" failures so manual testing on cold-start devices and emulators is understandable.
 
 Architectural rule:
 - Coordinates alone are not enough input for AI insight generation.

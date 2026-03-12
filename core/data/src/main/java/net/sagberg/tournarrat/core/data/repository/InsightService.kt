@@ -24,7 +24,7 @@ class InsightService(
     suspend fun generateInsightHere(): Result<InsightRecord> {
         val preferences = preferencesRepository.preferences.first()
         val location = currentLocationProvider.getCurrentLocation()
-            ?: return Result.failure(IllegalStateException("Location is unavailable. Grant location permission and try again."))
+            .getOrElse { return Result.failure(it) }
 
         val placeContext = placeContextProvider.resolve(location)
         val client: AiClient = when (preferences.aiProvider) {

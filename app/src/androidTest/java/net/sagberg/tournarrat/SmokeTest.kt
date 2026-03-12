@@ -117,11 +117,13 @@ class SmokeTest {
 }
 
 private class FakeCurrentLocationProvider : CurrentLocationProvider {
-    override suspend fun getCurrentLocation(): Location =
-        Location("smoke-test").apply {
-            latitude = 48.2082
-            longitude = 16.3738
-        }
+    override suspend fun getCurrentLocation(): Result<Location> =
+        Result.success(
+            Location("smoke-test").apply {
+                latitude = 48.2082
+                longitude = 16.3738
+            },
+        )
 }
 
 private class FakePlaceContextProvider : PlaceContextProvider {
