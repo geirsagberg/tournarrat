@@ -267,56 +267,62 @@ private fun HomeScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
+                .padding(padding),
+            contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            HomeHero(preferences = uiState.preferences)
+            item {
+                HomeHero(preferences = uiState.preferences)
+            }
 
-            Card {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("Manual insight", style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        "Use your current location and generate one grounded insight for wherever you are right now.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (uiState.isGenerating) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    }
-                    Button(
-                        modifier = Modifier.testTag(UiTags.HomeGenerateInsightButton),
-                        onClick = {
-                            permissionsGranted = context.hasLocationPermission()
-                            if (permissionsGranted) {
-                                viewModel.generateInsight()
-                            } else {
-                                permissionLauncher.launch(
-                                    arrayOf(
-                                        Manifest.permission.ACCESS_COARSE_LOCATION,
-                                        Manifest.permission.ACCESS_FINE_LOCATION,
-                                    ),
-                                )
-                            }
-                        },
+            item {
+                Card {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Text(if (permissionsGranted) "Generate insight here" else "Grant location and generate")
+                        Text("Manual insight", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            "Use your current location and generate one grounded insight for wherever you are right now.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        if (uiState.isGenerating) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                        }
+                        Button(
+                            modifier = Modifier.testTag(UiTags.HomeGenerateInsightButton),
+                            onClick = {
+                                permissionsGranted = context.hasLocationPermission()
+                                if (permissionsGranted) {
+                                    viewModel.generateInsight()
+                                } else {
+                                    permissionLauncher.launch(
+                                        arrayOf(
+                                            Manifest.permission.ACCESS_COARSE_LOCATION,
+                                            Manifest.permission.ACCESS_FINE_LOCATION,
+                                        ),
+                                    )
+                                }
+                            },
+                        ) {
+                            Text(if (permissionsGranted) "Generate insight here" else "Grant location and generate")
+                        }
                     }
                 }
             }
 
             uiState.latestInsight?.let { record ->
-                InsightCard(
-                    insight = record,
-                    onSpeak = viewModel::speakLatestInsight,
-                    onStop = viewModel::stopNarration,
-                    onOpenDetail = { onOpenDetail(record.id) },
-                )
+                item {
+                    InsightCard(
+                        insight = record,
+                        onSpeak = viewModel::speakLatestInsight,
+                        onStop = viewModel::stopNarration,
+                        onOpenDetail = { onOpenDetail(record.id) },
+                    )
+                }
             }
         }
     }

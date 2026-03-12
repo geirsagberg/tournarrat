@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+env_file="${repo_dir}/.env"
 
 if [[ -f "${HOME}/.sdkman/bin/sdkman-init.sh" ]]; then
   # Use the repo-pinned Java when sdkman is available.
@@ -42,3 +43,33 @@ cd "${repo_dir}"
 ./gradlew --no-configuration-cache \
   :app:connectedDebugAndroidTest \
   -Pandroid.testInstrumentationRunnerArguments.class=net.sagberg.tournarrat.SmokeTest
+
+openai_api_key=""
+if [[ -f "${env_file}" ]]; then
+  openai_api_key="$(
+    python3 - "${env_file}" <<'PY'
+import sys
+from pathlib import Path
+
+env_path = Path(sys.argv[1])
+for line in env_path.read_text().splitlines():
+    stripped = line.strip()
+    if not stripped or stripped.startswith("#") or "=" not in stripped:
+        continue
+    key, value = stripped.split("=", 1)
+    if key.strip() == "OPENAI_API_KEY":
+        print(value.strip().strip("'\""))
+        break
+PY
+  )"
+fi
+
+if [[ -n "${openai_api_key}" ]]; then
+  echo "Running live OpenAI smoke test on ${device_serial}"
+  ./gradlew --no-configuration-cache \
+    :app:connectedDebugAndroidTest \
+    -Pandroid.testInstrumentationRunnerArguments.class=net.sagberg.tournarrat.LiveOpenAiSmokeTest \
+    "-Pandroid.testInstrumentationRunnerArguments.openAiApiKey=${openai_api_key}"
+else
+  echo "Skipping live OpenAI smoke test because OPENAI_API_KEY is not set in .env"
+fi

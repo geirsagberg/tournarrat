@@ -2,17 +2,23 @@ package net.sagberg.tournarrat.core.data.ai
 
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonArray
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
+import kotlinx.serialization.json.putJsonObject
 import net.sagberg.tournarrat.core.data.preferences.ApiKeyStore
 import net.sagberg.tournarrat.core.model.AppPreferences
 import net.sagberg.tournarrat.core.model.InsightDraft
 import net.sagberg.tournarrat.core.model.InsightRequest
-import net.sagberg.tournarrat.core.model.InterestTopic
 
 interface AiClient {
     suspend fun generateInsight(request: InsightRequest): Result<InsightDraft>
@@ -63,8 +69,9 @@ class OpenAiClient(
                 error(payload.ifBlank { "OpenAI request failed with ${connection.responseCode}." })
             }
 
-            val response = json.decodeFromString<OpenAiChatCompletionResponse>(payload)
-            val content = response.choices.firstOrNull()?.message?.content
+            val response = json.decodeFromString<OpenAiResponsesResponse>(payload)
+            val content = response.firstOutputText()
+                ?: response.firstRefusal()
                 ?: error("OpenAI response did not contain assistant content.")
             json.decodeFromString<InsightDraft>(content)
         }
@@ -76,18 +83,17 @@ class OpenAiClient(
 
         runCatching {
             val connection = createConnection(apiKey)
-            val body = OpenAiChatCompletionRequest(
+            val body = OpenAiResponsesRequest(
                 model = MODEL,
-                temperature = 0.1,
-                responseFormat = ResponseFormat(type = "json_object"),
-                messages = listOf(
-                    ChatMessage(
+                store = false,
+                input = listOf(
+                    message(
                         role = "system",
-                        content = "Return valid JSON with a single key named status whose value is ok.",
+                        text = "You are validating OpenAI API access for an Android app.",
                     ),
-                    ChatMessage(
+                    message(
                         role = "user",
-                        content = "Validate that this key can reach the chat completions endpoint.",
+                        text = "Reply with the exact text ok.",
                     ),
                 ),
             )
@@ -104,7 +110,7 @@ class OpenAiClient(
     }
 
     private fun createConnection(apiKey: String): HttpURLConnection {
-        return (URL("$BASE_URL/chat/completions").openConnection() as HttpURLConnection).apply {
+        return (URL("$BASE_URL/responses").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 20_000
             readTimeout = 30_000
@@ -117,7 +123,7 @@ class OpenAiClient(
     private fun buildRequest(
         preferences: AppPreferences,
         request: InsightRequest,
-    ): OpenAiChatCompletionRequest {
+    ): OpenAiResponsesRequest {
         val interests = preferences.interests.joinToString { it.label.lowercase() }
         val hints = request.placeContext.hints.joinToString()
         val systemPrompt = buildString {
@@ -142,21 +148,69 @@ class OpenAiClient(
                 appendLine("Nearby hints: $hints.")
             }
         }
-        return OpenAiChatCompletionRequest(
+        return OpenAiResponsesRequest(
             model = MODEL,
-            temperature = 0.6,
-            responseFormat = ResponseFormat(type = "json_object"),
-            messages = listOf(
-                ChatMessage(role = "system", content = systemPrompt),
-                ChatMessage(role = "user", content = userPrompt),
+            store = false,
+            input = listOf(
+                message(role = "system", text = systemPrompt),
+                message(role = "user", text = userPrompt),
+            ),
+            text = ResponseTextConfig(
+                format = ResponseTextFormat(
+                    type = "json_schema",
+                    name = "insight_draft",
+                    schema = insightDraftSchema(),
+                    strict = true,
+                ),
             ),
         )
     }
 
     private companion object {
         const val BASE_URL = "https://api.openai.com/v1"
-        const val MODEL = "gpt-4.1-mini"
+        const val MODEL = "gpt-5-mini"
     }
+}
+
+private fun message(
+    role: String,
+    text: String,
+): ResponseInputItem = ResponseInputItem(
+    role = role,
+    content = listOf(ResponseInputContent(text = text)),
+)
+
+private fun insightDraftSchema(): JsonObject = buildJsonObject {
+    put("type", "object")
+    putJsonObject("properties") {
+        putJsonObject("title") {
+            put("type", "string")
+        }
+        putJsonObject("summary") {
+            put("type", "string")
+        }
+        putJsonObject("whyItMatters") {
+            put("type", "string")
+        }
+        putJsonObject("confidenceNote") {
+            put("type", "string")
+        }
+        putJsonObject("followUps") {
+            put("type", "array")
+            putJsonObject("items") {
+                put("type", "string")
+            }
+            put("maxItems", 2)
+        }
+    }
+    putJsonArray("required") {
+        add(JsonPrimitive("title"))
+        add(JsonPrimitive("summary"))
+        add(JsonPrimitive("whyItMatters"))
+        add(JsonPrimitive("confidenceNote"))
+        add(JsonPrimitive("followUps"))
+    }
+    put("additionalProperties", false)
 }
 
 private fun HttpURLConnection.readResponseText(): String {
@@ -165,36 +219,62 @@ private fun HttpURLConnection.readResponseText(): String {
 }
 
 @Serializable
-private data class OpenAiChatCompletionRequest(
+private data class OpenAiResponsesRequest(
     val model: String,
-    val messages: List<ChatMessage>,
-    val temperature: Double,
-    @SerialName("response_format")
-    val responseFormat: ResponseFormat,
+    val store: Boolean,
+    val input: List<ResponseInputItem>,
+    val text: ResponseTextConfig? = null,
 )
 
 @Serializable
-private data class ChatMessage(
+private data class ResponseInputItem(
     val role: String,
-    val content: String,
+    val content: List<ResponseInputContent>,
 )
 
 @Serializable
-private data class ResponseFormat(
+private data class ResponseInputContent(
+    val type: String = "input_text",
+    val text: String,
+)
+
+@Serializable
+private data class ResponseTextConfig(
+    val format: ResponseTextFormat,
+)
+
+@Serializable
+private data class ResponseTextFormat(
     val type: String,
+    val name: String? = null,
+    val schema: JsonElement? = null,
+    val strict: Boolean? = null,
 )
 
 @Serializable
-private data class OpenAiChatCompletionResponse(
-    val choices: List<Choice>,
-) {
-    @Serializable
-    data class Choice(
-        val message: Message,
-    )
+private data class OpenAiResponsesResponse(
+    val output: List<ResponseOutputItem> = emptyList(),
+)
 
-    @Serializable
-    data class Message(
-        val content: String,
-    )
-}
+@Serializable
+private data class ResponseOutputItem(
+    val content: List<ResponseOutputContent> = emptyList(),
+)
+
+@Serializable
+private data class ResponseOutputContent(
+    val text: String? = null,
+    val refusal: String? = null,
+)
+
+private fun OpenAiResponsesResponse.firstOutputText(): String? =
+    output.asSequence()
+        .flatMap { it.content.asSequence() }
+        .mapNotNull(ResponseOutputContent::text)
+        .firstOrNull(String::isNotBlank)
+
+private fun OpenAiResponsesResponse.firstRefusal(): String? =
+    output.asSequence()
+        .flatMap { it.content.asSequence() }
+        .mapNotNull(ResponseOutputContent::refusal)
+        .firstOrNull(String::isNotBlank)

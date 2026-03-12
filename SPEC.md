@@ -119,6 +119,7 @@ Requirements:
 - App can support multiple AI providers behind a common interface.
 - Prompts should request concise, factual, non-hallucinatory outputs with uncertainty acknowledged when needed.
 - Outputs should be structured enough for UI rendering and follow-up actions.
+- The first native OpenAI integration should use the modern Responses API rather than legacy chat completions.
 
 Initial output format:
 - title
