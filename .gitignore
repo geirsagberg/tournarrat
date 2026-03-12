@@ -1,0 +1,43 @@
+# macOS
+.DS_Store
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+
+# Gradle
+.gradle/
+build/
+**/build/
+configuration-cache/
+local.properties
+
+# Android
+captures/
+.cxx/
+externalNativeBuild/
+
+# Kotlin
+*.kotlin_module
+
+# Signing
+*.jks
+*.keystore
+keystore.properties
+
+# Generated config
+google-services.json
+firebase-*.json
+
+# Logs
+*.log
+
+# Coverage / test artifacts
+coverage/
+*.ec
+
+# Fastlane
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
