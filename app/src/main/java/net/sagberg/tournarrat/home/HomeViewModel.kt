@@ -2,6 +2,8 @@ package net.sagberg.tournarrat.home
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import java.time.Instant
+import net.sagberg.tournarrat.core.model.PlaceContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,7 +20,13 @@ data class HomeUiState(
     val preferences: AppPreferences = AppPreferences(),
     val isGenerating: Boolean = false,
     val latestInsight: InsightRecord? = null,
+    val latestResolvedPlace: ResolvedPlaceDebug? = null,
     val errorMessage: String? = null,
+)
+
+data class ResolvedPlaceDebug(
+    val placeContext: PlaceContext,
+    val updatedAt: Instant,
 )
 
 class HomeViewModel(
@@ -44,9 +52,16 @@ class HomeViewModel(
             transientState.value = uiState.value.copy(isGenerating = true, errorMessage = null)
             val result = insightService.generateInsightHere()
             transientState.value = if (result.isSuccess) {
+                val record = result.getOrNull()
                 uiState.value.copy(
                     isGenerating = false,
-                    latestInsight = result.getOrNull(),
+                    latestInsight = record,
+                    latestResolvedPlace = record?.let {
+                        ResolvedPlaceDebug(
+                            placeContext = it.placeContext,
+                            updatedAt = Instant.ofEpochMilli(it.createdAtEpochMillis),
+                        )
+                    },
                     errorMessage = null,
                 )
             } else {

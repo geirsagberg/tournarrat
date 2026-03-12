@@ -47,8 +47,6 @@ class FusedCurrentLocationProvider(
     }
 
     private suspend fun resolveCurrentLocation(): Location? {
-        client.lastLocation.await()?.let { return it }
-
         client.getCurrentLocation(
             CurrentLocationRequest.Builder()
                 .setPriority(Priority.PRIORITY_BALANCED_POWER_ACCURACY)
@@ -57,6 +55,8 @@ class FusedCurrentLocationProvider(
                 .build(),
             null,
         ).await()?.let { return it }
+
+        client.lastLocation.await()?.let { return it }
 
         return client.getCurrentLocation(
             CurrentLocationRequest.Builder()

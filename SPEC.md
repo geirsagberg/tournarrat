@@ -142,6 +142,7 @@ AI responsibility boundary:
 
 Primary surfaces:
 - Home screen with current area, latest insight, and quick actions.
+- Home screen with current resolved-location diagnostics for testing, including coordinates, geocoded place label, and last update time.
 - Feed/history screen showing recent place-based insights.
 - Detail screen for one insight with follow-up questions.
 - Mode setup and playback controls for live audio behavior.

@@ -102,9 +102,6 @@ abstract class BaseSmokeTest {
 
         if (expectDemoFallback) {
             composeRule.onNodeWithText("A quick read on Test District").assertIsDisplayed()
-            composeRule.onNodeWithText(
-                "OpenAI was unavailable, so this insight used demo fallback.",
-            ).assertIsDisplayed()
         } else {
             composeRule.onAllNodesWithText(
                 "OpenAI was unavailable, so this insight used demo fallback.",

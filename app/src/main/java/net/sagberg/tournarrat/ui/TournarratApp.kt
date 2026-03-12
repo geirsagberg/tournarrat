@@ -64,6 +64,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -80,6 +82,7 @@ import net.sagberg.tournarrat.core.model.OperatingMode
 import net.sagberg.tournarrat.detail.DetailViewModel
 import net.sagberg.tournarrat.history.HistoryViewModel
 import net.sagberg.tournarrat.home.HomeViewModel
+import net.sagberg.tournarrat.home.ResolvedPlaceDebug
 import net.sagberg.tournarrat.navigation.DetailRoute
 import net.sagberg.tournarrat.navigation.HistoryRoute
 import net.sagberg.tournarrat.navigation.HomeRoute
@@ -276,6 +279,12 @@ private fun HomeScreen(
         ) {
             item {
                 HomeHero(preferences = uiState.preferences)
+            }
+
+            uiState.latestResolvedPlace?.let { resolved ->
+                item {
+                    CurrentLocationCard(resolved)
+                }
             }
 
             item {
@@ -508,21 +517,6 @@ private fun SettingsScreen(
                     onSelect = viewModel::setFrequency,
                 )
             }
-            SettingsSection("Tone") {
-                OptionChips(
-                    options = InsightTone.entries,
-                    selected = uiState.preferences.tone,
-                    labelFor = { it.name.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase) },
-                    onSelect = viewModel::setTone,
-                )
-            }
-            SettingsSection("Interests") {
-                WrapChips(
-                    topics = InterestTopic.entries.toList(),
-                    selected = uiState.preferences.interests,
-                    onToggle = viewModel::toggleInterest,
-                )
-            }
             SettingsSection("Provider") {
                 OptionChips(
                     options = AiProvider.entries,
@@ -534,24 +528,6 @@ private fun SettingsScreen(
                         }
                     },
                     onSelect = viewModel::setProvider,
-                )
-            }
-            SettingsSection("Language") {
-                OutlinedTextField(
-                    value = uiState.preferences.outputLanguage,
-                    onValueChange = viewModel::setOutputLanguage,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Output language") },
-                    singleLine = true,
-                )
-            }
-            SettingsSection("Custom prompt") {
-                OutlinedTextField(
-                    value = uiState.preferences.customPrompt,
-                    onValueChange = viewModel::setCustomPrompt,
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 3,
-                    label = { Text("Custom instructions") },
                 )
             }
             SettingsSection("OpenAI API key") {
@@ -576,6 +552,39 @@ private fun SettingsScreen(
                         Text("Clear")
                     }
                 }
+            }
+            SettingsSection("Tone") {
+                OptionChips(
+                    options = InsightTone.entries,
+                    selected = uiState.preferences.tone,
+                    labelFor = { it.name.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase) },
+                    onSelect = viewModel::setTone,
+                )
+            }
+            SettingsSection("Interests") {
+                WrapChips(
+                    topics = InterestTopic.entries.toList(),
+                    selected = uiState.preferences.interests,
+                    onToggle = viewModel::toggleInterest,
+                )
+            }
+            SettingsSection("Language") {
+                OutlinedTextField(
+                    value = uiState.preferences.outputLanguage,
+                    onValueChange = viewModel::setOutputLanguage,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Output language") },
+                    singleLine = true,
+                )
+            }
+            SettingsSection("Custom prompt") {
+                OutlinedTextField(
+                    value = uiState.preferences.customPrompt,
+                    onValueChange = viewModel::setCustomPrompt,
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3,
+                    label = { Text("Custom instructions") },
+                )
             }
             SettingsSection("Privacy") {
                 OutlinedButton(onClick = viewModel::clearHistory) {
@@ -608,6 +617,46 @@ private fun HomeHero(preferences: AppPreferences) {
             Text(
                 "Interests: ${preferences.interests.joinToString { it.label }}",
                 style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun CurrentLocationCard(
+    resolved: ResolvedPlaceDebug,
+) {
+    val placeContext = resolved.placeContext
+    val updated = remember(resolved.updatedAt) {
+        timestampFormatter.format(resolved.updatedAt.atZone(ZoneId.systemDefault()))
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Current location", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "${formatCoordinate(placeContext.latitude)}, ${formatCoordinate(placeContext.longitude)}",
+                fontWeight = FontWeight.Medium,
+            )
+            Text(
+                listOfNotNull(
+                    placeContext.areaName,
+                    placeContext.locality,
+                    placeContext.countryName,
+                ).joinToString(),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                "Last updated $updated",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
             )
         }
     }
@@ -741,6 +790,11 @@ private fun android.content.Context.hasLocationPermission(): Boolean {
         Manifest.permission.ACCESS_COARSE_LOCATION,
     ) == PackageManager.PERMISSION_GRANTED
 }
+
+private fun formatCoordinate(value: Double): String = "%.5f".format(value)
+
+private val timestampFormatter: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
 
 private data class TopLevelDestination<T : Any>(
     val label: String,
