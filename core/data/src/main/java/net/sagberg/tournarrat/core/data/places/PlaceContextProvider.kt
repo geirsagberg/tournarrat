@@ -28,19 +28,23 @@ class GeocoderPlaceContextProvider(
 
     override suspend fun resolve(location: Location): PlaceContext {
         val address = getAddress(location)
+        val meaningfulFeatureName = address?.featureName?.takeIf(::isMeaningfulLabel)
+        val streetHint = address?.toStreetHint()
 
         val areaName = listOfNotNull(
-            address?.featureName,
+            meaningfulFeatureName,
             address?.subLocality,
             address?.locality,
+            address?.thoroughfare,
             address?.adminArea,
         ).firstOrNull().orEmpty().ifBlank {
             "${"%.4f".format(location.latitude)}, ${"%.4f".format(location.longitude)}"
         }
 
         val hints = listOfNotNull(
-            address?.featureName,
-            address?.thoroughfare,
+            meaningfulFeatureName,
+            streetHint,
+            address?.thoroughfare?.takeIf(::isMeaningfulLabel),
             address?.subLocality,
             address?.locality,
             address?.adminArea,
@@ -50,6 +54,7 @@ class GeocoderPlaceContextProvider(
             latitude = location.latitude,
             longitude = location.longitude,
             areaName = areaName,
+            fullAddress = address?.getAddressLine(0)?.trim()?.ifBlank { null } ?: streetHint,
             locality = address?.locality ?: address?.subAdminArea,
             countryName = address?.countryName,
             hints = hints,
@@ -74,6 +79,22 @@ class GeocoderPlaceContextProvider(
             )
         }.onFailure {
             continuation.resume(null)
+        }
+    }
+
+    private fun isMeaningfulLabel(value: String): Boolean {
+        val normalized = value.trim()
+        return normalized.isNotBlank() && !normalized.all(Char::isDigit)
+    }
+
+    private fun Address.toStreetHint(): String? {
+        val streetName = thoroughfare?.trim().orEmpty()
+        val feature = featureName?.trim().orEmpty()
+        if (streetName.isBlank()) return null
+        return if (feature.isNotBlank() && feature.all(Char::isDigit)) {
+            "$streetName $feature"
+        } else {
+            streetName
         }
     }
 }
@@ -173,6 +194,8 @@ class GooglePlacesContextProvider(
 
         return fallbackContext.copy(
             areaName = placeNames.firstOrNull() ?: fallbackContext.areaName,
+            fullAddress = places.firstNotNullOfOrNull { it.formattedAddress?.trim()?.ifBlank { null } }
+                ?: fallbackContext.fullAddress,
             hints = mergedHints,
         )
     }

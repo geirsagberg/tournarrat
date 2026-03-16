@@ -143,6 +143,7 @@ internal class FakePlaceContextProvider : PlaceContextProvider {
             latitude = location.latitude,
             longitude = location.longitude,
             areaName = "Test District",
+            fullAddress = "Stephansplatz 1, 1010 Vienna, Austria",
             locality = "Vienna",
             countryName = "Austria",
             hints = listOf("Stephansplatz", "Old Town"),

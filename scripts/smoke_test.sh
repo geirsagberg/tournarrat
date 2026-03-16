@@ -30,13 +30,19 @@ fi
 
 device_serial="${ANDROID_SERIAL:-}"
 if [[ -z "${device_serial}" ]]; then
-  device_serial="$("${adb_bin}" devices | awk 'NR > 1 && $2 == "device" { print $1; exit }')"
+  device_serial="$("${adb_bin}" devices | awk 'NR > 1 && $2 == "device" && $1 ~ /^emulator-/ { print $1; exit }')"
 fi
 
 if [[ -z "${device_serial}" ]]; then
-  echo "No connected Android device or emulator found." >&2
+  if "${adb_bin}" devices | awk 'NR > 1 && $2 == "device" { found = 1 } END { exit found ? 0 : 1 }'; then
+    echo "No emulator found. Start an emulator or set ANDROID_SERIAL explicitly to run smoke tests on a specific device." >&2
+  else
+    echo "No connected Android device or emulator found." >&2
+  fi
   exit 1
 fi
+
+export ANDROID_SERIAL="${device_serial}"
 
 echo "Running instrumentation smoke test on ${device_serial}"
 cd "${repo_dir}"

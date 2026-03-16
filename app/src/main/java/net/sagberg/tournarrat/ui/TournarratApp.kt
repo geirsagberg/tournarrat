@@ -674,6 +674,13 @@ private fun CurrentLocationCard(
                 ).joinToString(),
                 style = MaterialTheme.typography.bodyMedium,
             )
+            placeContext.fullAddress?.let { fullAddress ->
+                Text(
+                    fullAddress,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                )
+            }
             Text(
                 "Last updated $updated",
                 style = MaterialTheme.typography.bodySmall,
