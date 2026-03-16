@@ -8,3 +8,4 @@
 - Prefer formal Android smoke coverage in `app/src/androidTest` and keep shell-based `adb` scripts as thin wrappers around instrumentation runs instead of UI-scraping logic.
 - Default smoke-test runs to an emulator, not a plugged-in phone; if a physical device should be targeted, set `ANDROID_SERIAL` explicitly for that run.
 - Treat the D8 `Companion could not be found in class com.google.android.gms.internal.location.zze` warning from `com.google.android.gms:play-services-location` as a known upstream artifact issue unless it starts failing builds or causing runtime behavior changes.
+- For UI work, treat custom gesture, layout, or interaction logic as a last resort. Prefer modern native Compose, Material, and Android UI primitives even if they require extra investigation. If no viable native solution exists and custom UI logic is still necessary, pause and get user confirmation before implementing it.

@@ -32,7 +32,7 @@ val coreDataModule = module {
     single<InsightHistoryRepository> { InsightHistoryRepositoryImpl(androidContext(), get()) }
     single<CurrentLocationProvider> { FusedCurrentLocationProvider(androidContext()) }
     single<PlaceContextProvider> { GooglePlacesContextProvider(androidContext(), get(), get()) }
-    single<Narrator> { AndroidNarrator(androidContext()) }
+    single<Narrator> { AndroidNarrator(androidContext(), get()) }
     single { OpenAiClient(get(), get()) }
     single { DemoAiClient() }
     single { InsightService(get(), get(), get(), get(), get(), get()) }

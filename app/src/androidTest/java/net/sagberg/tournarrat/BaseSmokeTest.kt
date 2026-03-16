@@ -20,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import net.sagberg.tournarrat.core.data.di.coreDataModule
 import net.sagberg.tournarrat.core.data.location.CurrentLocationProvider
 import net.sagberg.tournarrat.core.data.narration.Narrator
+import net.sagberg.tournarrat.core.data.narration.NarratorDiagnostics
 import net.sagberg.tournarrat.core.data.places.PlaceContextProvider
 import net.sagberg.tournarrat.core.data.preferences.ApiKeyStore
 import net.sagberg.tournarrat.core.data.preferences.InsightHistoryRepository
@@ -96,16 +97,18 @@ abstract class BaseSmokeTest {
 
         composeRule.onNodeWithTag(UiTags.HomeScreen).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTags.HomeMapHero).assertIsDisplayed()
-        composeRule.waitUntil(5.seconds.inWholeMilliseconds) {
-            composeRule.onAllNodesWithText("Test District").fetchSemanticsNodes().isNotEmpty()
-        }
         composeRule.onAllNodesWithTag(UiTags.HomeDiagnosticsSheet).assertCountEquals(0)
         composeRule.onNodeWithTag(UiTags.HomeModePopups).assertIsSelected()
         composeRule.onNodeWithTag(UiTags.HomeOverflowButton).performClick()
         composeRule.onNodeWithTag(UiTags.HomeDiagnosticsMenuItem).performClick()
         composeRule.onNodeWithTag(UiTags.HomeDiagnosticsSheet).assertIsDisplayed()
-        composeRule.onNodeWithText("Resolved place").assertIsDisplayed()
-        composeRule.onNodeWithText("Fake place provider").assertIsDisplayed()
+        composeRule.waitUntil(5.seconds.inWholeMilliseconds) {
+            composeRule.onAllNodesWithText("Default engine").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithText("Speech").assertIsDisplayed()
+        composeRule.onNodeWithText("Default engine").assertIsDisplayed()
+        composeRule.onNodeWithText("Bound engine").assertIsDisplayed()
+        composeRule.onAllNodesWithText("fake.tts").assertCountEquals(3)
         composeRule.onNodeWithText("Close").performClick()
         composeRule.waitUntil(5.seconds.inWholeMilliseconds) {
             composeRule.onAllNodesWithTag(UiTags.HomeDiagnosticsSheet).fetchSemanticsNodes().isEmpty()
@@ -151,6 +154,7 @@ abstract class BaseSmokeTest {
 
         composeRule.onNodeWithTag(UiTags.TabSettings).performClick()
         composeRule.onNodeWithTag(UiTags.SettingsScreen).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTags.SettingsSpeechLocaleField).performScrollTo().assertIsDisplayed()
     }
 }
 
@@ -180,6 +184,19 @@ internal class FakePlaceContextProvider : PlaceContextProvider {
 
 internal class NoOpNarrator : Narrator {
     override suspend fun speak(text: String) = Unit
+
+    override suspend fun diagnostics(): NarratorDiagnostics =
+        NarratorDiagnostics(
+            defaultEnginePackage = "fake.tts",
+            boundEnginePackage = "fake.tts",
+            availableEngines = listOf("fake.tts"),
+            supportedLocaleTags = listOf("en-US", "nb-NO"),
+            selectedLocaleTag = null,
+            effectiveLocaleTag = "en-US",
+            voiceName = "fake-voice",
+            voiceLocale = "en-US",
+            isReady = true,
+        )
 
     override fun stop() = Unit
 }

@@ -167,9 +167,10 @@ Home screen rules:
 - The embedded map should be the primary full-screen canvas of Home.
 - The map should center on the latest resolved/current place and show a single "you are here" marker.
 - If no map key or current place is available, Home should show a graceful fallback state instead of a broken map.
+- Home should persist the last resolved place locally and use it as the startup placeholder while a fresh location lookup is in progress.
 - Manual insight should be the primary explicit action on Home and should be presented as a floating action button over the map.
 - The current mode should be switchable from the Home top bar without leaving the screen.
-- The latest generated insight should appear in a bottom sheet that can be dismissed and reopened.
+- The latest generated insight should appear in a draggable bottom sheet that opens partially expanded by default, can expand until its top reaches the system safe area, exposes its primary actions near the top for quick access, and can be dismissed and reopened.
 - Diagnostics should include coordinates, resolved place label, full address, last updated time, and place source/provider when available.
 
 Notification behavior:
@@ -193,6 +194,7 @@ User controls:
 - output tone selection, for example factual, playful, guide-like, academic, concise
 - custom prompt field for advanced users
 - preferred output language
+- preferred TTS locale
 - AI provider selection
 - API key entry and validation
 - clear history
@@ -246,6 +248,7 @@ Personalization rules:
 - The app shall let the user choose between live and popup operating modes.
 - The app shall let the user configure insight frequency, interest categories, tone, and custom prompt preferences.
 - The app shall support an output language preference.
+- The app shall support a separate TTS locale preference for narration.
 - The app shall let the user review stored place visits and generated insights.
 - The app shall let the user delete individual history items and clear all local history.
 
@@ -340,6 +343,11 @@ The first coding pass should produce:
 - manual "what is interesting here?" action
 - storage foundations for preferences, secure key handling, and cached insights
 
+Settings screen rules:
+- Stored provider API keys should remain visible and editable after they have been saved locally.
+- Frequency controls should keep their labels on a single line when standard phone width allows it.
+- Speech locale selection should use a compact dropdown rather than a chip grid.
+
 ### Decisions Still Needed Before Coding Starts In Earnest
 
 - none
@@ -429,6 +437,7 @@ Initial entities:
   - tone
   - custom prompt
   - output language
+  - TTS locale
   - live audio fallback behavior
 - `AiProviderConfig`
   - provider id
@@ -495,6 +504,7 @@ Initial entities:
 - The first release targets English as the default and only fully validated language.
 - The architecture should support expanding to any language supported by the configured AI provider and available TTS engine voices.
 - Language should remain a user preference rather than a hardcoded product assumption.
+- Narration locale should be independently configurable from AI output language.
 - If the chosen language is unsupported by the active TTS engine or provider combination, the app should fall back gracefully and explain the limitation.
 
 ## Audio Routing Principle

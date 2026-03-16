@@ -3,12 +3,14 @@ package net.sagberg.tournarrat.home
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import java.time.Instant
+import net.sagberg.tournarrat.core.data.narration.NarratorDiagnostics
 import net.sagberg.tournarrat.core.model.PlaceContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.sagberg.tournarrat.core.data.narration.Narrator
 import net.sagberg.tournarrat.core.data.preferences.PreferencesRepository
@@ -19,6 +21,7 @@ import net.sagberg.tournarrat.core.model.OperatingMode
 
 data class HomeUiState(
     val preferences: AppPreferences = AppPreferences(),
+    val isResolvingPlace: Boolean = true,
     val isGenerating: Boolean = false,
     val isNarrating: Boolean = false,
     val isDiagnosticsVisible: Boolean = false,
@@ -26,6 +29,7 @@ data class HomeUiState(
     val mapState: HomeMapState = HomeMapState(),
     val latestInsight: InsightRecord? = null,
     val latestResolvedPlace: ResolvedPlaceDebug? = null,
+    val narratorDiagnostics: NarratorDiagnostics? = null,
     val errorMessage: String? = null,
 )
 
@@ -52,7 +56,27 @@ class HomeViewModel(
         preferencesRepository.preferences,
         transientState,
     ) { preferences, transient ->
-        transient.copy(preferences = preferences)
+        val cachedPlace = preferences.cachedPlaceContext
+        val cachedUpdatedAt = preferences.cachedPlaceUpdatedAtEpochMillis
+        val effectiveMapState = if (transient.mapState.latitude != null && transient.mapState.longitude != null) {
+            transient.mapState
+        } else {
+            cachedPlace?.toMapState() ?: transient.mapState
+        }
+        val effectiveResolvedPlace = transient.latestResolvedPlace
+            ?: if (cachedPlace != null && cachedUpdatedAt != null) {
+                ResolvedPlaceDebug(
+                    placeContext = cachedPlace,
+                    updatedAt = Instant.ofEpochMilli(cachedUpdatedAt),
+                )
+            } else {
+                null
+            }
+        transient.copy(
+            preferences = preferences,
+            mapState = effectiveMapState,
+            latestResolvedPlace = effectiveResolvedPlace,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -61,64 +85,86 @@ class HomeViewModel(
 
     init {
         refreshCurrentPlace()
+        refreshNarratorDiagnostics()
     }
 
     fun refreshCurrentPlace() {
         viewModelScope.launch {
+            transientState.update { current ->
+                current.copy(isResolvingPlace = true)
+            }
             insightService.resolveCurrentPlace()
                 .onSuccess { placeContext ->
-                    transientState.value = uiState.value.copy(
-                        mapState = HomeMapState(
-                            latitude = placeContext.latitude,
-                            longitude = placeContext.longitude,
-                            label = placeContext.areaName,
-                            fullAddress = placeContext.fullAddress,
-                        ),
-                        latestResolvedPlace = ResolvedPlaceDebug(
-                            placeContext = placeContext,
-                            updatedAt = Instant.now(),
-                        ),
-                    )
+                    persistResolvedPlace(placeContext, Instant.now())
+                    transientState.update { current ->
+                        current.copy(
+                            isResolvingPlace = false,
+                            mapState = placeContext.toMapState(),
+                            latestResolvedPlace = ResolvedPlaceDebug(
+                                placeContext = placeContext,
+                                updatedAt = Instant.now(),
+                            ),
+                        )
+                    }
                 }
+                .onFailure {
+                    transientState.update { current ->
+                        current.copy(isResolvingPlace = false)
+                    }
+                }
+        }
+    }
+
+    fun refreshNarratorDiagnostics() {
+        viewModelScope.launch {
+            val diagnostics = narrator.diagnostics()
+            transientState.update { current ->
+                current.copy(narratorDiagnostics = diagnostics)
+            }
         }
     }
 
     fun generateInsight() {
         viewModelScope.launch {
-            transientState.value = uiState.value.copy(
-                isGenerating = true,
-                isInsightSheetVisible = false,
-                errorMessage = null,
-            )
-            val result = insightService.generateInsightHere()
-            transientState.value = if (result.isSuccess) {
-                val record = result.getOrNull()
-                uiState.value.copy(
-                    isGenerating = false,
-                    isNarrating = false,
-                    isInsightSheetVisible = record != null,
-                    mapState = record?.placeContext?.let { place ->
-                        HomeMapState(
-                            latitude = place.latitude,
-                            longitude = place.longitude,
-                            label = place.areaName,
-                            fullAddress = place.fullAddress,
-                        )
-                    } ?: uiState.value.mapState,
-                    latestInsight = record,
-                    latestResolvedPlace = record?.let {
-                        ResolvedPlaceDebug(
-                            placeContext = it.placeContext,
-                            updatedAt = Instant.ofEpochMilli(it.createdAtEpochMillis),
-                        )
-                    },
+            transientState.update { current ->
+                current.copy(
+                    isGenerating = true,
+                    isInsightSheetVisible = false,
                     errorMessage = null,
                 )
+            }
+            val result = insightService.generateInsightHere()
+            if (result.isSuccess) {
+                val record = result.getOrNull()
+                record?.let {
+                    persistResolvedPlace(
+                        placeContext = it.placeContext,
+                        updatedAt = Instant.ofEpochMilli(it.createdAtEpochMillis),
+                    )
+                }
+                transientState.update { current ->
+                    current.copy(
+                        isGenerating = false,
+                        isNarrating = false,
+                        isInsightSheetVisible = record != null,
+                        mapState = record?.placeContext?.toMapState() ?: current.mapState,
+                        latestInsight = record,
+                        latestResolvedPlace = record?.let {
+                            ResolvedPlaceDebug(
+                                placeContext = it.placeContext,
+                                updatedAt = Instant.ofEpochMilli(it.createdAtEpochMillis),
+                            )
+                        } ?: current.latestResolvedPlace,
+                        errorMessage = null,
+                    )
+                }
             } else {
-                uiState.value.copy(
-                    isGenerating = false,
-                    errorMessage = result.exceptionOrNull()?.message ?: "Unable to generate insight.",
-                )
+                transientState.update { current ->
+                    current.copy(
+                        isGenerating = false,
+                        errorMessage = result.exceptionOrNull()?.message ?: "Unable to generate insight.",
+                    )
+                }
             }
         }
     }
@@ -126,14 +172,18 @@ class HomeViewModel(
     fun speakLatestInsight() {
         val insight = uiState.value.latestInsight ?: return
         viewModelScope.launch {
-            transientState.value = uiState.value.copy(isNarrating = true)
+            transientState.update { current ->
+                current.copy(isNarrating = true)
+            }
             narrator.speak("${insight.title}. ${insight.summary}")
         }
     }
 
     fun stopNarration() {
         narrator.stop()
-        transientState.value = uiState.value.copy(isNarrating = false)
+        transientState.update { current ->
+            current.copy(isNarrating = false)
+        }
     }
 
     fun toggleNarration() {
@@ -145,7 +195,9 @@ class HomeViewModel(
     }
 
     fun clearMessage() {
-        transientState.value = uiState.value.copy(errorMessage = null)
+        transientState.update { current ->
+            current.copy(errorMessage = null)
+        }
     }
 
     fun setMode(mode: OperatingMode) {
@@ -155,20 +207,50 @@ class HomeViewModel(
     }
 
     fun showDiagnostics() {
-        transientState.value = uiState.value.copy(isDiagnosticsVisible = true)
+        refreshNarratorDiagnostics()
+        transientState.update { current ->
+            current.copy(isDiagnosticsVisible = true)
+        }
     }
 
     fun hideDiagnostics() {
-        transientState.value = uiState.value.copy(isDiagnosticsVisible = false)
+        transientState.update { current ->
+            current.copy(isDiagnosticsVisible = false)
+        }
     }
 
     fun showLatestInsight() {
         if (uiState.value.latestInsight != null) {
-            transientState.value = uiState.value.copy(isInsightSheetVisible = true)
+            transientState.update { current ->
+                current.copy(isInsightSheetVisible = true)
+            }
         }
     }
 
     fun hideLatestInsight() {
-        transientState.value = uiState.value.copy(isInsightSheetVisible = false)
+        transientState.update { current ->
+            current.copy(isInsightSheetVisible = false)
+        }
+    }
+
+    private fun persistResolvedPlace(
+        placeContext: PlaceContext,
+        updatedAt: Instant,
+    ) {
+        viewModelScope.launch {
+            preferencesRepository.update { current ->
+                current.copy(
+                    cachedPlaceContext = placeContext,
+                    cachedPlaceUpdatedAtEpochMillis = updatedAt.toEpochMilli(),
+                )
+            }
+        }
     }
 }
+
+private fun PlaceContext.toMapState(): HomeMapState = HomeMapState(
+    latitude = latitude,
+    longitude = longitude,
+    label = areaName,
+    fullAddress = fullAddress,
+)

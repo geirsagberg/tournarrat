@@ -11,6 +11,9 @@ data class AppPreferences(
     val interests: Set<InterestTopic> = InterestTopic.defaultSelection,
     val customPrompt: String = "",
     val outputLanguage: String = "English",
+    val ttsLocaleTag: String? = null,
+    val cachedPlaceContext: PlaceContext? = null,
+    val cachedPlaceUpdatedAtEpochMillis: Long? = null,
     val aiProvider: AiProvider = AiProvider.OPEN_AI,
 )
 

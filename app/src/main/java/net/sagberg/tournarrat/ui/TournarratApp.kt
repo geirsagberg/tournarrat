@@ -8,28 +8,26 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoStories
@@ -45,6 +43,9 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,6 +56,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -74,6 +76,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -109,6 +112,7 @@ import net.sagberg.tournarrat.history.HistoryViewModel
 import net.sagberg.tournarrat.home.HomeMapState
 import net.sagberg.tournarrat.home.HomeViewModel
 import net.sagberg.tournarrat.home.ResolvedPlaceDebug
+import net.sagberg.tournarrat.core.data.narration.NarratorDiagnostics
 import net.sagberg.tournarrat.navigation.DetailRoute
 import net.sagberg.tournarrat.navigation.HistoryRoute
 import net.sagberg.tournarrat.navigation.HomeRoute
@@ -324,24 +328,6 @@ private fun HomeScreen(
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
-        if (uiState.isDiagnosticsVisible) {
-            DiagnosticsSheet(
-                resolved = uiState.latestResolvedPlace,
-                onDismiss = viewModel::hideDiagnostics,
-            )
-        }
-        uiState.latestInsight?.takeIf { uiState.isInsightSheetVisible }?.let { record ->
-            LatestInsightSheet(
-                insight = record,
-                isNarrating = uiState.isNarrating,
-                onDismiss = viewModel::hideLatestInsight,
-                onToggleNarration = viewModel::toggleNarration,
-                onOpenDetail = {
-                    viewModel.hideLatestInsight()
-                    onOpenDetail(record.id)
-                },
-            )
-        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -350,6 +336,7 @@ private fun HomeScreen(
         ) {
             HomeMapHero(
                 mapState = uiState.mapState,
+                isResolvingPlace = uiState.isResolvingPlace,
                 modifier = Modifier.fillMaxSize(),
             )
             Column(
@@ -371,7 +358,7 @@ private fun HomeScreen(
                         }
                     }
                 } else if (uiState.latestInsight != null && !uiState.isInsightSheetVisible) {
-                    OutlinedButton(onClick = viewModel::showLatestInsight) {
+                    Button(onClick = viewModel::showLatestInsight) {
                         Text("Open latest insight")
                     }
                 }
@@ -391,6 +378,25 @@ private fun HomeScreen(
                             )
                         }
                     },
+                )
+            }
+            uiState.latestInsight?.takeIf { uiState.isInsightSheetVisible }?.let { record ->
+                LatestInsightSheet(
+                    insight = record,
+                    isNarrating = uiState.isNarrating,
+                    onDismiss = viewModel::hideLatestInsight,
+                    onToggleNarration = viewModel::toggleNarration,
+                    onOpenDetail = {
+                        viewModel.hideLatestInsight()
+                        onOpenDetail(record.id)
+                    },
+                )
+            }
+            if (uiState.isDiagnosticsVisible) {
+                DiagnosticsSheet(
+                    resolved = uiState.latestResolvedPlace,
+                    narratorDiagnostics = uiState.narratorDiagnostics,
+                    onDismiss = viewModel::hideDiagnostics,
                 )
             }
         }
@@ -579,7 +585,14 @@ private fun SettingsScreen(
                 OptionChips(
                     options = InsightFrequency.entries,
                     selected = uiState.preferences.frequency,
-                    labelFor = { it.name.lowercase().replaceFirstChar(Char::titlecase) },
+                    labelFor = {
+                        when (it) {
+                            InsightFrequency.LOW -> "Low"
+                            InsightFrequency.MEDIUM -> "Medium"
+                            InsightFrequency.HIGH -> "High"
+                        }
+                    },
+                    itemsPerRow = 3,
                     onSelect = viewModel::setFrequency,
                 )
             }
@@ -664,6 +677,37 @@ private fun SettingsScreen(
                     singleLine = true,
                 )
             }
+            SettingsSection("Speech locale") {
+                val narratorDiagnostics = uiState.narratorDiagnostics
+                val supportedLocaleTags = narratorDiagnostics?.supportedLocaleTags.orEmpty()
+                val effectiveLocaleTag = narratorDiagnostics?.effectiveLocaleTag
+                val selectedLocaleTag = uiState.preferences.ttsLocaleTag
+
+                Text(
+                    "Choose the locale used for on-device narration only. This does not change the AI output language.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                if (supportedLocaleTags.isEmpty()) {
+                    Text(
+                        "No speech locales are available yet. Open Diagnostics or try speaking once to initialize the engine.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    NullableDropdownField(
+                        options = supportedLocaleTags,
+                        selected = selectedLocaleTag,
+                        label = "Speech locale",
+                        autoLabel = buildString {
+                            append("Auto")
+                            if (!effectiveLocaleTag.isNullOrBlank()) {
+                                append(" ($effectiveLocaleTag)")
+                            }
+                        },
+                        labelFor = { it },
+                        onSelect = viewModel::setTtsLocale,
+                    )
+                }
+            }
             SettingsSection("Custom prompt") {
                 OutlinedTextField(
                     value = uiState.preferences.customPrompt,
@@ -685,6 +729,7 @@ private fun SettingsScreen(
 @Composable
 private fun HomeMapHero(
     mapState: HomeMapState,
+    isResolvingPlace: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier = modifier) {
@@ -709,8 +754,10 @@ private fun HomeMapHero(
                             when {
                                 BuildConfig.GOOGLE_MAPS_API_KEY.isBlank() ->
                                     "Add an app-owned MAPS_API_KEY locally to enable the embedded map."
+                                isResolvingPlace ->
+                                    "Locating your current place..."
                                 else ->
-                                    "Generate an insight to center the map on your current place."
+                                    "Waiting for a current location fix."
                             },
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -835,51 +882,86 @@ private fun LatestInsightSheet(
     onToggleNarration: () -> Unit,
     onOpenDetail: () -> Unit,
 ) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .testTag(UiTags.HomeInsightSheet),
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = false,
+    )
+    val density = LocalDensity.current
+    ModalBottomSheet(
+        modifier = Modifier.testTag(UiTags.HomeInsightSheet),
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
-                .clickable(onClick = onDismiss, indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }),
-        )
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .fillMaxHeight(0.86f),
-            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-            tonalElevation = 8.dp,
-        ) {
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val topInsetDp = with(density) {
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Top).getTop(this).toDp()
+            }
+            val maxSheetHeight = (maxHeight - topInsetDp).coerceAtLeast(0.dp)
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 20.dp, vertical = 8.dp)
-                    .padding(bottom = 24.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                    .fillMaxWidth()
+                    .height(maxSheetHeight),
             ) {
-                Box(
+                Column(
                     modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(top = 8.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
-                            shape = RoundedCornerShape(999.dp),
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Button(
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag(UiTags.InsightOpenDetailButton),
+                            onClick = onOpenDetail,
+                        ) {
+                            Text("Open detail")
+                        }
+                        NarrationButton(
+                            modifier = Modifier.weight(1f),
+                            isNarrating = isNarrating,
+                            onClick = onToggleNarration,
                         )
-                        .fillMaxWidth(0.18f)
-                        .height(4.dp),
-                )
-                Text("Latest insight", style = MaterialTheme.typography.labelLarge)
-                InsightCard(
-                    insight = insight,
-                    isNarrating = isNarrating,
-                    onToggleNarration = onToggleNarration,
-                    onOpenDetail = onOpenDetail,
-                )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                    ) {
+                        TextButton(onClick = onDismiss) {
+                            Text("Close")
+                        }
+                    }
+                    Text("Latest insight", style = MaterialTheme.typography.labelLarge)
+                    Text(insight.title, style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        insight.placeContext.areaName,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp)
+                        .padding(bottom = 16.dp)
+                        .windowInsetsPadding(WindowInsets.navigationBars),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text(insight.summary)
+                    Text(
+                        insight.whyItMatters,
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    if (insight.usedDemoFallback) {
+                        Text(
+                            "OpenAI was unavailable, so this insight used demo fallback.",
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
             }
         }
     }
@@ -888,6 +970,7 @@ private fun LatestInsightSheet(
 @Composable
 private fun DiagnosticsSheet(
     resolved: ResolvedPlaceDebug?,
+    narratorDiagnostics: NarratorDiagnostics?,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(
@@ -928,6 +1011,43 @@ private fun DiagnosticsSheet(
                 placeContext.sourceName?.let { MetadataRow("Place source", it) }
                 MetadataRow("Last updated", updated)
             }
+            Text("Speech", style = MaterialTheme.typography.titleMedium)
+            if (narratorDiagnostics == null) {
+                Text(
+                    "Speech diagnostics are unavailable right now.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                MetadataRow(
+                    "Default engine",
+                    narratorDiagnostics.defaultEnginePackage ?: "Unknown",
+                )
+                MetadataRow(
+                    "Bound engine",
+                    narratorDiagnostics.boundEnginePackage ?: "Unknown",
+                )
+                MetadataRow(
+                    "Selected locale",
+                    narratorDiagnostics.selectedLocaleTag ?: "Auto",
+                )
+                MetadataRow(
+                    "Effective locale",
+                    narratorDiagnostics.effectiveLocaleTag ?: "Unknown",
+                )
+                MetadataRow(
+                    "Engine status",
+                    if (narratorDiagnostics.isReady) "Ready" else "Not ready",
+                )
+                MetadataRow(
+                    "Voice",
+                    narratorDiagnostics.voiceName ?: "Unknown",
+                )
+                narratorDiagnostics.voiceLocale?.let { MetadataRow("Voice locale", it) }
+                MetadataRow(
+                    "Installed engines",
+                    narratorDiagnostics.availableEngines.ifEmpty { listOf("Unknown") }.joinToString(),
+                )
+            }
             TextButton(onClick = onDismiss) {
                 Text("Close")
             }
@@ -936,51 +1056,15 @@ private fun DiagnosticsSheet(
 }
 
 @Composable
-private fun InsightCard(
-    insight: InsightRecord,
-    isNarrating: Boolean,
-    onToggleNarration: () -> Unit,
-    onOpenDetail: () -> Unit,
-) {
-    Card {
-        Column(
-            modifier = Modifier
-                .testTag(UiTags.InsightCard)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Text(insight.title, style = MaterialTheme.typography.titleLarge)
-            Text(insight.placeContext.areaName, color = MaterialTheme.colorScheme.primary)
-            Text(insight.summary)
-            Text(insight.whyItMatters, style = MaterialTheme.typography.bodyMedium)
-            if (insight.usedDemoFallback) {
-                Text(
-                    "OpenAI was unavailable, so this insight used demo fallback.",
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    modifier = Modifier.testTag(UiTags.InsightOpenDetailButton),
-                    onClick = onOpenDetail,
-                ) {
-                    Text("Open detail")
-                }
-                NarrationButton(
-                    isNarrating = isNarrating,
-                    onClick = onToggleNarration,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 private fun NarrationButton(
+    modifier: Modifier = Modifier,
     isNarrating: Boolean,
     onClick: () -> Unit,
 ) {
-    OutlinedButton(onClick = onClick) {
+    OutlinedButton(
+        modifier = modifier,
+        onClick = onClick,
+    ) {
         if (isNarrating) {
             Icon(
                 Icons.Rounded.Stop,
@@ -1094,18 +1178,82 @@ private fun <T> OptionChips(
     options: List<T>,
     selected: T,
     labelFor: (T) -> String,
+    itemsPerRow: Int = 2,
     onSelect: (T) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        options.chunked(2).forEach { row ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        options.chunked(itemsPerRow).forEach { row ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 row.forEach { option ->
                     FilterChip(
+                        modifier = Modifier.weight(1f),
                         selected = option == selected,
                         onClick = { onSelect(option) },
-                        label = { Text(labelFor(option)) },
+                        label = {
+                            Text(
+                                text = labelFor(option),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
                     )
                 }
+                repeat(itemsPerRow - row.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> NullableDropdownField(
+    options: List<T>,
+    selected: T?,
+    label: String,
+    autoLabel: String,
+    labelFor: (T) -> String,
+    onSelect: (T?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val allOptions = listOf<T?>(null) + options
+    val selectedLabel = selected?.let(labelFor) ?: autoLabel
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+    ) {
+        OutlinedTextField(
+            value = selectedLabel,
+            onValueChange = {},
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(UiTags.SettingsSpeechLocaleField)
+                .menuAnchor(
+                    type = ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                ),
+            readOnly = true,
+            singleLine = true,
+            label = { Text(label) },
+            trailingIcon = {
+                ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+            },
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            allOptions.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option?.let(labelFor) ?: autoLabel) },
+                    onClick = {
+                        onSelect(option)
+                        expanded = false
+                    },
+                )
             }
         }
     }

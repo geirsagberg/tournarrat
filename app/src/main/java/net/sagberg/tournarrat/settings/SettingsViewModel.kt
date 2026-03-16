@@ -6,10 +6,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import net.sagberg.tournarrat.core.data.ai.OpenAiClient
+import net.sagberg.tournarrat.core.data.narration.Narrator
+import net.sagberg.tournarrat.core.data.narration.NarratorDiagnostics
 import net.sagberg.tournarrat.core.data.preferences.ApiKeyStore
 import net.sagberg.tournarrat.core.data.preferences.InsightHistoryRepository
 import net.sagberg.tournarrat.core.data.preferences.PreferencesRepository
@@ -24,6 +26,7 @@ data class SettingsUiState(
     val preferences: AppPreferences = AppPreferences(),
     val openAiKey: String = "",
     val googlePlacesKey: String = "",
+    val narratorDiagnostics: NarratorDiagnostics? = null,
     val validationMessage: String? = null,
     val isValidating: Boolean = false,
 )
@@ -33,6 +36,7 @@ class SettingsViewModel(
     private val historyRepository: InsightHistoryRepository,
     private val apiKeyStore: ApiKeyStore,
     private val openAiClient: OpenAiClient,
+    private val narrator: Narrator,
 ) : ViewModel() {
     private val transientState = MutableStateFlow(
         SettingsUiState(
@@ -49,8 +53,12 @@ class SettingsViewModel(
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
-        initialValue = SettingsUiState(),
+        initialValue = transientState.value,
     )
+
+    init {
+        refreshNarratorDiagnostics()
+    }
 
     fun setMode(value: OperatingMode) = updatePrefs { copy(mode = value) }
 
@@ -69,60 +77,97 @@ class SettingsViewModel(
 
     fun setOutputLanguage(value: String) = updatePrefs { copy(outputLanguage = value) }
 
+    fun setTtsLocale(value: String?) {
+        viewModelScope.launch {
+            preferencesRepository.update { current -> current.copy(ttsLocaleTag = value) }
+            refreshNarratorDiagnostics()
+        }
+    }
+
     fun setOpenAiKey(value: String) {
-        transientState.value = uiState.value.copy(openAiKey = value)
+        transientState.update { current ->
+            current.copy(openAiKey = value)
+        }
     }
 
     fun setGooglePlacesKey(value: String) {
-        transientState.value = uiState.value.copy(googlePlacesKey = value)
+        transientState.update { current ->
+            current.copy(googlePlacesKey = value)
+        }
     }
 
     fun saveOpenAiKey() {
         apiKeyStore.setOpenAiApiKey(uiState.value.openAiKey)
-        transientState.value = uiState.value.copy(validationMessage = "OpenAI key saved locally.")
+        transientState.update { current ->
+            current.copy(validationMessage = "OpenAI key saved locally.")
+        }
     }
 
     fun clearOpenAiKey() {
         apiKeyStore.clearOpenAiApiKey()
-        transientState.value = uiState.value.copy(openAiKey = "", validationMessage = "OpenAI key cleared.")
+        transientState.update { current ->
+            current.copy(openAiKey = "", validationMessage = "OpenAI key cleared.")
+        }
     }
 
     fun saveGooglePlacesKey() {
         apiKeyStore.setGooglePlacesApiKey(uiState.value.googlePlacesKey)
-        transientState.value = uiState.value.copy(validationMessage = "Google Places key saved locally.")
+        transientState.update { current ->
+            current.copy(validationMessage = "Google Places key saved locally.")
+        }
     }
 
     fun clearGooglePlacesKey() {
         apiKeyStore.clearGooglePlacesApiKey()
-        transientState.value = uiState.value.copy(
-            googlePlacesKey = "",
-            validationMessage = "Google Places key cleared.",
-        )
+        transientState.update { current ->
+            current.copy(
+                googlePlacesKey = "",
+                validationMessage = "Google Places key cleared.",
+            )
+        }
     }
 
     fun validateOpenAiKey() {
         viewModelScope.launch {
-            transientState.value = uiState.value.copy(isValidating = true, validationMessage = null)
+            transientState.update { current ->
+                current.copy(isValidating = true, validationMessage = null)
+            }
             val result = openAiClient.validateCurrentKey()
-            transientState.value = uiState.value.copy(
-                isValidating = false,
-                validationMessage = result.fold(
-                    onSuccess = { "OpenAI key validated successfully." },
-                    onFailure = { it.message ?: "OpenAI key validation failed." },
-                ),
-            )
+            transientState.update { current ->
+                current.copy(
+                    isValidating = false,
+                    validationMessage = result.fold(
+                        onSuccess = { "OpenAI key validated successfully." },
+                        onFailure = { it.message ?: "OpenAI key validation failed." },
+                    ),
+                )
+            }
         }
     }
 
     fun clearHistory() {
         viewModelScope.launch {
             historyRepository.clear()
-            transientState.value = uiState.value.copy(validationMessage = "Local history cleared.")
+            transientState.update { current ->
+                current.copy(validationMessage = "Local history cleared.")
+            }
         }
     }
 
     fun clearMessage() {
-        transientState.value = uiState.value.copy(validationMessage = null)
+        transientState.update { current ->
+            current.copy(validationMessage = null)
+        }
+    }
+
+    fun refreshNarratorDiagnostics() {
+        viewModelScope.launch {
+            transientState.update { current ->
+                current.copy(
+                    narratorDiagnostics = narrator.diagnostics(),
+                )
+            }
+        }
     }
 
     private fun updatePrefs(transform: AppPreferences.() -> AppPreferences) {

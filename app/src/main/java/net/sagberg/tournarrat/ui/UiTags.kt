@@ -21,4 +21,5 @@ object UiTags {
     const val HomeInsightSheet = "home_insight_sheet"
     const val InsightCard = "insight_card"
     const val InsightOpenDetailButton = "insight_open_detail_button"
+    const val SettingsSpeechLocaleField = "settings_speech_locale_field"
 }
