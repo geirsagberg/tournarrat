@@ -10,6 +10,7 @@ import net.sagberg.tournarrat.core.data.places.PlaceContextProvider
 import net.sagberg.tournarrat.core.data.preferences.InsightHistoryRepository
 import net.sagberg.tournarrat.core.data.preferences.PreferencesRepository
 import net.sagberg.tournarrat.core.model.AiProvider
+import net.sagberg.tournarrat.core.model.InsightGenerationMetadata
 import net.sagberg.tournarrat.core.model.InsightRecord
 import net.sagberg.tournarrat.core.model.InsightRequest
 
@@ -59,6 +60,11 @@ class InsightService(
             followUps = draft.followUps,
             provider = if (fallbackUsed) AiProvider.DEMO else preferences.aiProvider,
             usedDemoFallback = fallbackUsed,
+            generationMetadata = InsightGenerationMetadata(
+                tone = preferences.tone,
+                interests = preferences.interests,
+                customPrompt = preferences.customPrompt,
+            ),
         )
         historyRepository.save(record)
         return Result.success(record)

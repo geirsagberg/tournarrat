@@ -133,6 +133,8 @@ Initial output format:
 Guardrails:
 - Prefer grounded prompts with explicit place/context inputs.
 - Avoid presenting invented facts as certain.
+- Do not reference raw coordinates or house numbers directly in generated user-facing insight text.
+- Street or place names without house numbers are acceptable when they help orientation.
 - If source context is too weak, the app should skip the notification rather than fabricate value.
 
 AI responsibility boundary:
@@ -147,6 +149,7 @@ Primary surfaces:
 - Home screen with current resolved-location diagnostics for testing, including coordinates, geocoded place label, and last update time.
 - Feed/history screen showing recent place-based insights.
 - Detail screen for one insight with follow-up questions.
+- Detail screen should also expose a metadata view showing the generation-time tone, interests, custom prompt, and confidence note used for that insight.
 - Mode setup and playback controls for live audio behavior.
 - Settings screen for provider setup, permissions, frequency, and privacy controls.
 

@@ -125,13 +125,22 @@ class OpenAiClient(
         request: InsightRequest,
     ): OpenAiResponsesRequest {
         val interests = preferences.interests.joinToString { it.label.lowercase() }
-        val hints = request.placeContext.hints.joinToString()
+        val hints = request.placeContext.hints
+            .map(::stripTrailingStreetNumber)
+            .filter(String::isNotBlank)
+            .distinct()
+            .joinToString()
+        val streetName = request.placeContext.fullAddress
+            ?.let(::stripTrailingStreetNumber)
+            ?.takeIf(String::isNotBlank)
         val systemPrompt = buildString {
             appendLine("You are Tournarrat, a grounded travel companion.")
             appendLine("Return strict JSON with keys: title, summary, whyItMatters, confidenceNote, followUps.")
             appendLine("followUps must be an array with 0 to 2 short follow-up prompts.")
             appendLine("Keep the tone ${preferences.tone.name.lowercase().replace('_', ' ')}.")
             appendLine("Prefer concise, factual claims. If context is weak, say so.")
+            appendLine("Do not mention raw coordinates, house numbers, or full street addresses in the output.")
+            appendLine("Street names and place names without house numbers are acceptable.")
             if (preferences.customPrompt.isNotBlank()) {
                 appendLine("User preference: ${preferences.customPrompt.trim()}")
             }
@@ -143,7 +152,9 @@ class OpenAiClient(
             appendLine("Area: ${request.placeContext.areaName}.")
             appendLine("Locality: ${request.placeContext.locality ?: "Unknown"}.")
             appendLine("Country: ${request.placeContext.countryName ?: "Unknown"}.")
-            appendLine("Coordinates: ${request.placeContext.latitude}, ${request.placeContext.longitude}.")
+            streetName?.let {
+                appendLine("Street context: $it.")
+            }
             if (hints.isNotBlank()) {
                 appendLine("Nearby hints: $hints.")
             }
@@ -171,6 +182,9 @@ class OpenAiClient(
         const val MODEL = "gpt-5-mini"
     }
 }
+
+private fun stripTrailingStreetNumber(value: String): String =
+    value.trim().replace(Regex("""([,\s]+)\d+[A-Za-z]?$"""), "").trim().trimEnd(',')
 
 private fun message(
     role: String,

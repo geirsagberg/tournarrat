@@ -12,6 +12,13 @@ data class InsightDraft(
 )
 
 @Serializable
+data class InsightGenerationMetadata(
+    val tone: InsightTone,
+    val interests: Set<InterestTopic>,
+    val customPrompt: String = "",
+)
+
+@Serializable
 data class InsightRecord(
     val id: String,
     val createdAtEpochMillis: Long,
@@ -23,6 +30,7 @@ data class InsightRecord(
     val followUps: List<String>,
     val provider: AiProvider,
     val usedDemoFallback: Boolean,
+    val generationMetadata: InsightGenerationMetadata? = null,
 )
 
 @Serializable

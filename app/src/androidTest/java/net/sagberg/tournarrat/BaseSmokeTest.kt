@@ -116,6 +116,11 @@ abstract class BaseSmokeTest {
         composeRule.onNodeWithTag(UiTags.DetailScreen).assertIsDisplayed()
         composeRule.onNodeWithText("Insight detail").assertIsDisplayed()
         composeRule.onNodeWithText("Test District").assertIsDisplayed()
+        composeRule.onNodeWithText("Metadata").performScrollTo().performClick()
+        composeRule.onNodeWithText("Confidence").assertIsDisplayed()
+        composeRule.onNodeWithText("Tone").assertIsDisplayed()
+        composeRule.onNodeWithText("Interests").assertIsDisplayed()
+        composeRule.onNodeWithText("Custom prompt").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Back").performClick()
 
         composeRule.onNodeWithTag(UiTags.TabHistory).performClick()

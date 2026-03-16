@@ -75,6 +75,7 @@ import androidx.navigation.toRoute
 import net.sagberg.tournarrat.core.model.AiProvider
 import net.sagberg.tournarrat.core.model.AppPreferences
 import net.sagberg.tournarrat.core.model.InsightFrequency
+import net.sagberg.tournarrat.core.model.InsightGenerationMetadata
 import net.sagberg.tournarrat.core.model.InsightRecord
 import net.sagberg.tournarrat.core.model.InsightTone
 import net.sagberg.tournarrat.core.model.InterestTopic
@@ -413,6 +414,7 @@ private fun DetailScreen(
 ) {
     val viewModel = koinViewModel<DetailViewModel>()
     val record by viewModel.record(insightId).collectAsStateWithLifecycle()
+    var showMetadata by rememberSaveable(insightId) { mutableStateOf(false) }
 
     Scaffold(
         modifier = modifier.testTag(UiTags.DetailScreen),
@@ -452,9 +454,6 @@ private fun DetailScreen(
                 item {
                     DetailSection("Why it matters", current.whyItMatters)
                 }
-                item {
-                    DetailSection("Confidence", current.confidenceNote)
-                }
                 if (current.followUps.isNotEmpty()) {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -465,6 +464,19 @@ private fun DetailScreen(
                                     label = { Text(followUp) },
                                 )
                             }
+                        }
+                    }
+                }
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(onClick = { showMetadata = !showMetadata }) {
+                            Text(if (showMetadata) "Hide metadata" else "Metadata")
+                        }
+                        if (showMetadata) {
+                            MetadataSection(
+                                metadata = current.generationMetadata,
+                                confidenceNote = current.confidenceNote,
+                            )
                         }
                     }
                 }
@@ -736,6 +748,56 @@ private fun DetailSection(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(body)
+    }
+}
+
+@Composable
+private fun MetadataSection(
+    metadata: InsightGenerationMetadata?,
+    confidenceNote: String,
+) {
+    Card(
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Metadata", style = MaterialTheme.typography.titleMedium)
+            MetadataRow("Confidence", confidenceNote)
+            if (metadata == null) {
+                Text(
+                    "Generation settings were not captured for this older insight.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                MetadataRow(
+                    "Tone",
+                    metadata.tone.name.lowercase().replace('_', ' ').replaceFirstChar(Char::titlecase),
+                )
+                MetadataRow(
+                    "Interests",
+                    metadata.interests.joinToString { it.label },
+                )
+                MetadataRow(
+                    "Custom prompt",
+                    metadata.customPrompt.ifBlank { "None" },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetadataRow(
+    label: String,
+    value: String,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelLarge)
+        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
 
