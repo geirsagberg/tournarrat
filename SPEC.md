@@ -103,6 +103,7 @@ Requirements:
 - Deduplicate similar insights for the same area.
 - Gracefully degrade when network access is unavailable.
 - Distinguish location permission failures from "no location fix yet" failures so manual testing on cold-start devices and emulators is understandable.
+- Use Google Places nearby search when a Google Maps Platform key is configured, with Android geocoder fallback if the Google request is unavailable or not configured yet.
 
 Architectural rule:
 - Coordinates alone are not enough input for AI insight generation.
@@ -117,6 +118,7 @@ Requirements:
 - User provides their own API key.
 - App stores the key securely on-device.
 - App can support multiple AI providers behind a common interface.
+- App should also support a separately configured Google Maps Platform key for nearby place enrichment.
 - Prompts should request concise, factual, non-hallucinatory outputs with uncertainty acknowledged when needed.
 - Outputs should be structured enough for UI rendering and follow-up actions.
 - The first native OpenAI integration should use the modern Responses API rather than legacy chat completions.
@@ -276,7 +278,7 @@ These defaults should be treated as settled enough to scaffold the project unles
 - Kotlin-only codebase
 - Jetpack Compose UI
 - Material 3
-- Minimum SDK: API 30
+- Minimum SDK: API 33
 - Target SDK: latest stable available at implementation time
 - Compile SDK: latest stable available at implementation time
 
@@ -288,8 +290,8 @@ Rationale:
 
 - Modular project from day one
 - MVVM plus unidirectional state flow
-- Hilt for dependency injection
-- Room for local structured data
+- Koin for dependency injection
+- DataStore-backed local persistence for preferences and history in the first version
 - DataStore for preferences
 - WorkManager for deferred/background processing
 - Fused Location Provider for sensing
@@ -300,7 +302,7 @@ Rationale:
 - Use a hybrid AI integration approach:
   - implement OpenAI as the first native provider adapter
   - keep the interface compatible with adding an OpenRouter adapter next
-- Use Google Places and Google reverse geocoding as the first place-context provider implementation.
+- Use Google Places nearby search as the first network place-context provider implementation, with Android geocoder fallback and room to add Google reverse geocoding next.
 - Place and reverse-geocoding providers should also sit behind an abstraction boundary.
 - Provider-specific request and response details must stay out of UI code.
 - Do not couple app logic to provider SDKs unless a specific provider later justifies it.

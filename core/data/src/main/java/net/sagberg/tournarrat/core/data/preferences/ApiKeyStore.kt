@@ -18,6 +18,12 @@ interface ApiKeyStore {
     fun setOpenAiApiKey(value: String)
 
     fun clearOpenAiApiKey()
+
+    fun getGooglePlacesApiKey(): String?
+
+    fun setGooglePlacesApiKey(value: String)
+
+    fun clearGooglePlacesApiKey()
 }
 
 class EncryptedApiKeyStore(context: Context) : ApiKeyStore {
@@ -35,6 +41,19 @@ class EncryptedApiKeyStore(context: Context) : ApiKeyStore {
 
     override fun clearOpenAiApiKey() {
         preferences.edit().remove(OPEN_AI_KEY).apply()
+    }
+
+    override fun getGooglePlacesApiKey(): String? {
+        val payload = preferences.getString(GOOGLE_PLACES_KEY, null) ?: return null
+        return runCatching { decrypt(payload) }.getOrNull()
+    }
+
+    override fun setGooglePlacesApiKey(value: String) {
+        preferences.edit().putString(GOOGLE_PLACES_KEY, encrypt(value.trim())).apply()
+    }
+
+    override fun clearGooglePlacesApiKey() {
+        preferences.edit().remove(GOOGLE_PLACES_KEY).apply()
     }
 
     private fun encrypt(plainText: String): String {
@@ -85,6 +104,7 @@ class EncryptedApiKeyStore(context: Context) : ApiKeyStore {
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val KEY_ALIAS = "tournarrat_api_key"
         const val OPEN_AI_KEY = "open_ai_api_key"
+        const val GOOGLE_PLACES_KEY = "google_places_api_key"
         const val PREFERENCES_FILE = "secure_api_keys"
         const val PAYLOAD_SEPARATOR = "."
         const val GCM_TAG_LENGTH_BITS = 128

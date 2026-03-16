@@ -159,6 +159,7 @@ internal class InMemoryApiKeyStore(
     initialOpenAiKey: String? = null,
 ) : ApiKeyStore {
     private var openAiKey: String? = initialOpenAiKey
+    private var googlePlacesKey: String? = null
 
     override fun getOpenAiApiKey(): String? = openAiKey
 
@@ -168,5 +169,15 @@ internal class InMemoryApiKeyStore(
 
     override fun clearOpenAiApiKey() {
         openAiKey = null
+    }
+
+    override fun getGooglePlacesApiKey(): String? = googlePlacesKey
+
+    override fun setGooglePlacesApiKey(value: String) {
+        googlePlacesKey = value
+    }
+
+    override fun clearGooglePlacesApiKey() {
+        googlePlacesKey = null
     }
 }

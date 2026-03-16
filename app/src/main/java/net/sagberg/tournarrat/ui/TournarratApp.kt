@@ -553,6 +553,27 @@ private fun SettingsScreen(
                     }
                 }
             }
+            SettingsSection("Google Places API key") {
+                Text(
+                    "Optional. When set, nearby place context uses Google Places and falls back to Android geocoding if needed.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedTextField(
+                    value = uiState.googlePlacesKey,
+                    onValueChange = viewModel::setGooglePlacesKey,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("AIza...") },
+                    singleLine = true,
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = viewModel::saveGooglePlacesKey) {
+                        Text("Save")
+                    }
+                    TextButton(onClick = viewModel::clearGooglePlacesKey) {
+                        Text("Clear")
+                    }
+                }
+            }
             SettingsSection("Tone") {
                 OptionChips(
                     options = InsightTone.entries,

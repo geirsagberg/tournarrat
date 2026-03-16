@@ -13,7 +13,7 @@ extensions.configure<ApplicationExtension> {
 
     defaultConfig {
         applicationId = "net.sagberg.tournarrat"
-        minSdk = 30
+        minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"

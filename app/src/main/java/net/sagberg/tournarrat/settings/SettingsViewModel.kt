@@ -23,6 +23,7 @@ import net.sagberg.tournarrat.core.model.OperatingMode
 data class SettingsUiState(
     val preferences: AppPreferences = AppPreferences(),
     val openAiKey: String = "",
+    val googlePlacesKey: String = "",
     val validationMessage: String? = null,
     val isValidating: Boolean = false,
 )
@@ -33,7 +34,12 @@ class SettingsViewModel(
     private val apiKeyStore: ApiKeyStore,
     private val openAiClient: OpenAiClient,
 ) : ViewModel() {
-    private val transientState = MutableStateFlow(SettingsUiState(openAiKey = apiKeyStore.getOpenAiApiKey().orEmpty()))
+    private val transientState = MutableStateFlow(
+        SettingsUiState(
+            openAiKey = apiKeyStore.getOpenAiApiKey().orEmpty(),
+            googlePlacesKey = apiKeyStore.getGooglePlacesApiKey().orEmpty(),
+        ),
+    )
 
     val uiState: StateFlow<SettingsUiState> = combine(
         preferencesRepository.preferences,
@@ -67,6 +73,10 @@ class SettingsViewModel(
         transientState.value = uiState.value.copy(openAiKey = value)
     }
 
+    fun setGooglePlacesKey(value: String) {
+        transientState.value = uiState.value.copy(googlePlacesKey = value)
+    }
+
     fun saveOpenAiKey() {
         apiKeyStore.setOpenAiApiKey(uiState.value.openAiKey)
         transientState.value = uiState.value.copy(validationMessage = "OpenAI key saved locally.")
@@ -75,6 +85,19 @@ class SettingsViewModel(
     fun clearOpenAiKey() {
         apiKeyStore.clearOpenAiApiKey()
         transientState.value = uiState.value.copy(openAiKey = "", validationMessage = "OpenAI key cleared.")
+    }
+
+    fun saveGooglePlacesKey() {
+        apiKeyStore.setGooglePlacesApiKey(uiState.value.googlePlacesKey)
+        transientState.value = uiState.value.copy(validationMessage = "Google Places key saved locally.")
+    }
+
+    fun clearGooglePlacesKey() {
+        apiKeyStore.clearGooglePlacesApiKey()
+        transientState.value = uiState.value.copy(
+            googlePlacesKey = "",
+            validationMessage = "Google Places key cleared.",
+        )
     }
 
     fun validateOpenAiKey() {

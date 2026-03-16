@@ -7,7 +7,7 @@ import net.sagberg.tournarrat.core.data.location.CurrentLocationProvider
 import net.sagberg.tournarrat.core.data.location.FusedCurrentLocationProvider
 import net.sagberg.tournarrat.core.data.narration.AndroidNarrator
 import net.sagberg.tournarrat.core.data.narration.Narrator
-import net.sagberg.tournarrat.core.data.places.GeocoderPlaceContextProvider
+import net.sagberg.tournarrat.core.data.places.GooglePlacesContextProvider
 import net.sagberg.tournarrat.core.data.places.PlaceContextProvider
 import net.sagberg.tournarrat.core.data.preferences.ApiKeyStore
 import net.sagberg.tournarrat.core.data.preferences.EncryptedApiKeyStore
@@ -31,7 +31,7 @@ val coreDataModule = module {
     single<PreferencesRepository> { PreferencesRepositoryImpl(androidContext(), get()) }
     single<InsightHistoryRepository> { InsightHistoryRepositoryImpl(androidContext(), get()) }
     single<CurrentLocationProvider> { FusedCurrentLocationProvider(androidContext()) }
-    single<PlaceContextProvider> { GeocoderPlaceContextProvider(androidContext()) }
+    single<PlaceContextProvider> { GooglePlacesContextProvider(androidContext(), get(), get()) }
     single<Narrator> { AndroidNarrator(androidContext()) }
     single { OpenAiClient(get(), get()) }
     single { DemoAiClient() }
