@@ -8,7 +8,6 @@ data class InsightDraft(
     val summary: String,
     val whyItMatters: String,
     val confidenceNote: String,
-    val followUps: List<String> = emptyList(),
 )
 
 @Serializable
@@ -27,7 +26,6 @@ data class InsightRecord(
     val summary: String,
     val whyItMatters: String,
     val confidenceNote: String,
-    val followUps: List<String>,
     val provider: AiProvider,
     val usedDemoFallback: Boolean,
     val generationMetadata: InsightGenerationMetadata? = null,

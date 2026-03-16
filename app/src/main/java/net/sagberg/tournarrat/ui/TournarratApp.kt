@@ -24,15 +24,18 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
-import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -80,6 +83,7 @@ import net.sagberg.tournarrat.core.model.InsightRecord
 import net.sagberg.tournarrat.core.model.InsightTone
 import net.sagberg.tournarrat.core.model.InterestTopic
 import net.sagberg.tournarrat.core.model.OperatingMode
+import net.sagberg.tournarrat.detail.DetailUiState
 import net.sagberg.tournarrat.detail.DetailViewModel
 import net.sagberg.tournarrat.history.HistoryViewModel
 import net.sagberg.tournarrat.home.HomeViewModel
@@ -328,8 +332,8 @@ private fun HomeScreen(
                 item {
                     InsightCard(
                         insight = record,
-                        onSpeak = viewModel::speakLatestInsight,
-                        onStop = viewModel::stopNarration,
+                        isNarrating = uiState.isNarrating,
+                        onToggleNarration = viewModel::toggleNarration,
                         onOpenDetail = { onOpenDetail(record.id) },
                     )
                 }
@@ -414,6 +418,7 @@ private fun DetailScreen(
 ) {
     val viewModel = koinViewModel<DetailViewModel>()
     val record by viewModel.record(insightId).collectAsStateWithLifecycle()
+    val detailUiState by viewModel.uiState.collectAsStateWithLifecycle()
     var showMetadata by rememberSaveable(insightId) { mutableStateOf(false) }
 
     Scaffold(
@@ -423,6 +428,13 @@ private fun DetailScreen(
                 title = { Text("Insight detail") },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
+                },
+                actions = {
+                    DetailNarrationAction(
+                        uiState = detailUiState,
+                        enabled = record != null,
+                        onToggleNarration = { viewModel.toggleNarration(record) },
+                    )
                 },
             )
         },
@@ -453,19 +465,6 @@ private fun DetailScreen(
                 }
                 item {
                     DetailSection("Why it matters", current.whyItMatters)
-                }
-                if (current.followUps.isNotEmpty()) {
-                    item {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Follow-ups", style = MaterialTheme.typography.titleMedium)
-                            current.followUps.forEach { followUp ->
-                                AssistChip(
-                                    onClick = {},
-                                    label = { Text(followUp) },
-                                )
-                            }
-                        }
-                    }
                 }
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -705,8 +704,8 @@ private fun CurrentLocationCard(
 @Composable
 private fun InsightCard(
     insight: InsightRecord,
-    onSpeak: () -> Unit,
-    onStop: () -> Unit,
+    isNarrating: Boolean,
+    onToggleNarration: () -> Unit,
     onOpenDetail: () -> Unit,
 ) {
     Card {
@@ -733,9 +732,35 @@ private fun InsightCard(
                 ) {
                     Text("Open detail")
                 }
-                OutlinedButton(onClick = onSpeak) { Text("Speak") }
-                TextButton(onClick = onStop) { Text("Stop") }
+                NarrationButton(
+                    isNarrating = isNarrating,
+                    onClick = onToggleNarration,
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun NarrationButton(
+    isNarrating: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(onClick = onClick) {
+        if (isNarrating) {
+            Icon(
+                Icons.Rounded.Stop,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Text("Stop")
+        } else {
+            Icon(
+                Icons.Rounded.PlayArrow,
+                contentDescription = null,
+                modifier = Modifier.padding(end = 6.dp),
+            )
+            Text("Speak")
         }
     }
 }
@@ -748,6 +773,24 @@ private fun DetailSection(
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(title, style = MaterialTheme.typography.titleMedium)
         Text(body)
+    }
+}
+
+@Composable
+private fun DetailNarrationAction(
+    uiState: DetailUiState,
+    enabled: Boolean,
+    onToggleNarration: () -> Unit,
+) {
+    IconButton(
+        onClick = onToggleNarration,
+        enabled = enabled,
+    ) {
+        if (uiState.isNarrating) {
+            Icon(Icons.Rounded.Stop, contentDescription = "Stop narration")
+        } else {
+            Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Speak insight")
+        }
     }
 }
 

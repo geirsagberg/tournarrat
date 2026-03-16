@@ -31,7 +31,7 @@ The app should feel like a quiet companion:
 - A user arrives in a new city and wants lightweight, relevant facts about nearby landmarks, neighborhoods, architecture, and local culture.
 - A user walks through an unfamiliar area and receives occasional insights when they appear to have meaningfully changed location.
 - A user walks with earphones connected and listens to live spoken insights as they enter new areas.
-- A user taps into the app to browse recent places and ask follow-up questions about what is around them.
+- A user taps into the app to browse recent places, review past insights, and replay narration on demand.
 - A privacy-conscious user supplies their own AI API key instead of relying on an app-managed backend key.
 
 ## Core Product Principles
@@ -120,14 +120,13 @@ Requirements:
 - App can support multiple AI providers behind a common interface.
 - App should also support a separately configured Google Maps Platform key for nearby place enrichment.
 - Prompts should request concise, factual, non-hallucinatory outputs with uncertainty acknowledged when needed.
-- Outputs should be structured enough for UI rendering and follow-up actions.
+- Outputs should be structured enough for UI rendering, narration, and local history review.
 - The first native OpenAI integration should use the modern Responses API rather than legacy chat completions.
 
 Initial output format:
 - title
 - short insight summary
 - why this matters here
-- optional follow-up question suggestions
 - confidence or certainty note
 
 Guardrails:
@@ -138,7 +137,7 @@ Guardrails:
 - If source context is too weak, the app should skip the notification rather than fabricate value.
 
 AI responsibility boundary:
-- AI is responsible for interpretation, summarization, style adaptation, and follow-up answers.
+- AI is responsible for interpretation, summarization, and style adaptation.
 - The deterministic app layer is responsible for sensing, candidate place gathering, cooldowns, deduplication, and surfacing decisions.
 - The app may ask AI to choose among a short list of candidate places, but should not rely on AI alone to discover nearby places from raw coordinates.
 
@@ -148,7 +147,7 @@ Primary surfaces:
 - Home screen with current area, latest insight, and quick actions.
 - Home screen with current resolved-location diagnostics for testing, including coordinates, geocoded place label, and last update time.
 - Feed/history screen showing recent place-based insights.
-- Detail screen for one insight with follow-up questions.
+- Detail screen for one insight, including replayable narration and generation metadata.
 - Detail screen should also expose a metadata view showing the generation-time tone, interests, custom prompt, and confidence note used for that insight.
 - Mode setup and playback controls for live audio behavior.
 - Settings screen for provider setup, permissions, frequency, and privacy controls.
@@ -479,7 +478,6 @@ Initial entities:
 
 ## Open Questions
 
-- Should follow-up questions run against the same provider key and model settings as automatic insights?
 - How much control should advanced users have over prompt templates before the UX becomes too complex?
 
 ## Localization Direction
@@ -518,6 +516,5 @@ Initial entities:
 - OpenRouter adapter
 - additional native provider adapters if needed
 - richer nearby context
-- follow-up questions
 - live spoken mode with text-to-speech
 - tuning based on real battery and relevance observations

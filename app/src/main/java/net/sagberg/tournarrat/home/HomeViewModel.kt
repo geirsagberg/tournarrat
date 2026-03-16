@@ -19,6 +19,7 @@ import net.sagberg.tournarrat.core.model.InsightRecord
 data class HomeUiState(
     val preferences: AppPreferences = AppPreferences(),
     val isGenerating: Boolean = false,
+    val isNarrating: Boolean = false,
     val latestInsight: InsightRecord? = null,
     val latestResolvedPlace: ResolvedPlaceDebug? = null,
     val errorMessage: String? = null,
@@ -55,6 +56,7 @@ class HomeViewModel(
                 val record = result.getOrNull()
                 uiState.value.copy(
                     isGenerating = false,
+                    isNarrating = false,
                     latestInsight = record,
                     latestResolvedPlace = record?.let {
                         ResolvedPlaceDebug(
@@ -76,12 +78,22 @@ class HomeViewModel(
     fun speakLatestInsight() {
         val insight = uiState.value.latestInsight ?: return
         viewModelScope.launch {
+            transientState.value = uiState.value.copy(isNarrating = true)
             narrator.speak("${insight.title}. ${insight.summary}")
         }
     }
 
     fun stopNarration() {
         narrator.stop()
+        transientState.value = uiState.value.copy(isNarrating = false)
+    }
+
+    fun toggleNarration() {
+        if (uiState.value.isNarrating) {
+            stopNarration()
+        } else {
+            speakLatestInsight()
+        }
     }
 
     fun clearMessage() {

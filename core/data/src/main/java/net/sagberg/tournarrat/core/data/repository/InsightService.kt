@@ -57,7 +57,6 @@ class InsightService(
             summary = draft.summary,
             whyItMatters = draft.whyItMatters,
             confidenceNote = draft.confidenceNote,
-            followUps = draft.followUps,
             provider = if (fallbackUsed) AiProvider.DEMO else preferences.aiProvider,
             usedDemoFallback = fallbackUsed,
             generationMetadata = InsightGenerationMetadata(

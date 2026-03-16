@@ -39,10 +39,6 @@ class DemoAiClient : AiClient {
                 summary = "$area looks like a strong place for $firstInterest. Use it as a waypoint and notice how it relates to $locality around you.",
                 whyItMatters = "This is a local demo insight so the app stays testable before you add a live AI key.",
                 confidenceNote = "Demo mode: grounded only in your current area label and nearby address hints.",
-                followUps = listOf(
-                    "What should I look for nearby?",
-                    "Give me a shorter live-mode version.",
-                ),
             ),
         )
     }
@@ -135,8 +131,7 @@ class OpenAiClient(
             ?.takeIf(String::isNotBlank)
         val systemPrompt = buildString {
             appendLine("You are Tournarrat, a grounded travel companion.")
-            appendLine("Return strict JSON with keys: title, summary, whyItMatters, confidenceNote, followUps.")
-            appendLine("followUps must be an array with 0 to 2 short follow-up prompts.")
+            appendLine("Return strict JSON with keys: title, summary, whyItMatters, confidenceNote.")
             appendLine("Keep the tone ${preferences.tone.name.lowercase().replace('_', ' ')}.")
             appendLine("Prefer concise, factual claims. If context is weak, say so.")
             appendLine("Do not mention raw coordinates, house numbers, or full street addresses in the output.")
@@ -209,20 +204,12 @@ private fun insightDraftSchema(): JsonObject = buildJsonObject {
         putJsonObject("confidenceNote") {
             put("type", "string")
         }
-        putJsonObject("followUps") {
-            put("type", "array")
-            putJsonObject("items") {
-                put("type", "string")
-            }
-            put("maxItems", 2)
-        }
     }
     putJsonArray("required") {
         add(JsonPrimitive("title"))
         add(JsonPrimitive("summary"))
         add(JsonPrimitive("whyItMatters"))
         add(JsonPrimitive("confidenceNote"))
-        add(JsonPrimitive("followUps"))
     }
     put("additionalProperties", false)
 }
