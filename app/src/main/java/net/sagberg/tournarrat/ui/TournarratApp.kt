@@ -7,14 +7,18 @@ import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -22,22 +26,31 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoStories
 import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.MyLocation
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
@@ -67,6 +80,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.Circle
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -75,8 +95,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
+import net.sagberg.tournarrat.BuildConfig
 import net.sagberg.tournarrat.core.model.AiProvider
-import net.sagberg.tournarrat.core.model.AppPreferences
 import net.sagberg.tournarrat.core.model.InsightFrequency
 import net.sagberg.tournarrat.core.model.InsightGenerationMetadata
 import net.sagberg.tournarrat.core.model.InsightRecord
@@ -86,6 +106,7 @@ import net.sagberg.tournarrat.core.model.OperatingMode
 import net.sagberg.tournarrat.detail.DetailUiState
 import net.sagberg.tournarrat.detail.DetailViewModel
 import net.sagberg.tournarrat.history.HistoryViewModel
+import net.sagberg.tournarrat.home.HomeMapState
 import net.sagberg.tournarrat.home.HomeViewModel
 import net.sagberg.tournarrat.home.ResolvedPlaceDebug
 import net.sagberg.tournarrat.navigation.DetailRoute
@@ -250,6 +271,7 @@ private fun HomeScreen(
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     var permissionsGranted by remember { mutableStateOf(context.hasLocationPermission()) }
+    var overflowExpanded by remember { mutableStateOf(false) }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions(),
     ) { result ->
@@ -270,73 +292,106 @@ private fun HomeScreen(
         modifier = modifier.testTag(UiTags.HomeScreen),
         topBar = {
             TopAppBar(
-                title = { Text("Explore now") },
+                title = { Text("Around you") },
+                actions = {
+                    HomeModeToggle(
+                        selectedMode = uiState.preferences.mode,
+                        onSelectMode = viewModel::setMode,
+                    )
+                    Box {
+                        IconButton(
+                            modifier = Modifier.testTag(UiTags.HomeOverflowButton),
+                            onClick = { overflowExpanded = true },
+                        ) {
+                            Icon(Icons.Rounded.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(
+                            expanded = overflowExpanded,
+                            onDismissRequest = { overflowExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                modifier = Modifier.testTag(UiTags.HomeDiagnosticsMenuItem),
+                                text = { Text("Diagnostics") },
+                                onClick = {
+                                    overflowExpanded = false
+                                    viewModel.showDiagnostics()
+                                },
+                            )
+                        }
+                    }
+                },
             )
         },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
     ) { padding ->
-        LazyColumn(
+        if (uiState.isDiagnosticsVisible) {
+            DiagnosticsSheet(
+                resolved = uiState.latestResolvedPlace,
+                onDismiss = viewModel::hideDiagnostics,
+            )
+        }
+        uiState.latestInsight?.takeIf { uiState.isInsightSheetVisible }?.let { record ->
+            LatestInsightSheet(
+                insight = record,
+                isNarrating = uiState.isNarrating,
+                onDismiss = viewModel::hideLatestInsight,
+                onToggleNarration = viewModel::toggleNarration,
+                onOpenDetail = {
+                    viewModel.hideLatestInsight()
+                    onOpenDetail(record.id)
+                },
+            )
+        }
+        Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+                .padding(padding)
+                .testTag(UiTags.HomeMapHero),
         ) {
-            item {
-                HomeHero(preferences = uiState.preferences)
-            }
-
-            uiState.latestResolvedPlace?.let { resolved ->
-                item {
-                    CurrentLocationCard(resolved)
-                }
-            }
-
-            item {
-                Card {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                        Text("Manual insight", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Use your current location and generate one grounded insight for wherever you are right now.",
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                        if (uiState.isGenerating) {
+            HomeMapHero(
+                mapState = uiState.mapState,
+                modifier = Modifier.fillMaxSize(),
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(20.dp)
+                    .windowInsetsPadding(WindowInsets.navigationBars),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End,
+            ) {
+                if (uiState.isGenerating) {
+                    Card {
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Text("Generating insight", style = MaterialTheme.typography.titleMedium)
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                         }
-                        Button(
-                            modifier = Modifier.testTag(UiTags.HomeGenerateInsightButton),
-                            onClick = {
-                                permissionsGranted = context.hasLocationPermission()
-                                if (permissionsGranted) {
-                                    viewModel.generateInsight()
-                                } else {
-                                    permissionLauncher.launch(
-                                        arrayOf(
-                                            Manifest.permission.ACCESS_COARSE_LOCATION,
-                                            Manifest.permission.ACCESS_FINE_LOCATION,
-                                        ),
-                                    )
-                                }
-                            },
-                        ) {
-                            Text(if (permissionsGranted) "Generate insight here" else "Grant location and generate")
-                        }
+                    }
+                } else if (uiState.latestInsight != null && !uiState.isInsightSheetVisible) {
+                    OutlinedButton(onClick = viewModel::showLatestInsight) {
+                        Text("Open latest insight")
                     }
                 }
-            }
-
-            uiState.latestInsight?.let { record ->
-                item {
-                    InsightCard(
-                        insight = record,
-                        isNarrating = uiState.isNarrating,
-                        onToggleNarration = viewModel::toggleNarration,
-                        onOpenDetail = { onOpenDetail(record.id) },
-                    )
-                }
+                ManualInsightFab(
+                    isGenerating = uiState.isGenerating,
+                    hasPermission = permissionsGranted,
+                    onGenerate = {
+                        permissionsGranted = context.hasLocationPermission()
+                        if (permissionsGranted) {
+                            viewModel.generateInsight()
+                        } else {
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                ),
+                            )
+                        }
+                    },
+                )
             }
         }
     }
@@ -628,75 +683,254 @@ private fun SettingsScreen(
 }
 
 @Composable
-private fun HomeHero(preferences: AppPreferences) {
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-        ),
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text("Tournarrat", style = MaterialTheme.typography.headlineSmall)
-            Text(
-                "Current mode: ${preferences.mode.name.lowercase().replaceFirstChar(Char::titlecase)}",
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                "Frequency ${preferences.frequency.name.lowercase()}, tone ${preferences.tone.name.lowercase().replace('_', ' ')}.",
-            )
-            Text(
-                "Interests: ${preferences.interests.joinToString { it.label }}",
-                style = MaterialTheme.typography.bodyMedium,
-            )
+private fun HomeMapHero(
+    mapState: HomeMapState,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier) {
+        if (BuildConfig.GOOGLE_MAPS_API_KEY.isBlank() || mapState.latitude == null || mapState.longitude == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .testTag(UiTags.HomeMapFallback),
+                contentAlignment = Alignment.Center,
+            ) {
+                Card(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        Text("Map view", style = MaterialTheme.typography.titleLarge)
+                        Text(
+                            when {
+                                BuildConfig.GOOGLE_MAPS_API_KEY.isBlank() ->
+                                    "Add an app-owned MAPS_API_KEY locally to enable the embedded map."
+                                else ->
+                                    "Generate an insight to center the map on your current place."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        mapState.label?.let {
+                            Text(
+                                "Latest place: $it",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                }
+            }
+        } else {
+            val latLng = remember(mapState.latitude, mapState.longitude) {
+                LatLng(mapState.latitude, mapState.longitude)
+            }
+            val cameraPositionState = rememberCameraPositionState {
+                position = CameraPosition.fromLatLngZoom(latLng, 15f)
+            }
+            GoogleMap(
+                modifier = Modifier.fillMaxSize(),
+                cameraPositionState = cameraPositionState,
+            ) {
+                Marker(
+                    state = MarkerState(position = latLng),
+                    title = mapState.label ?: "Current place",
+                    snippet = mapState.fullAddress,
+                )
+                Circle(
+                    center = latLng,
+                    radius = 140.0,
+                    fillColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                    strokeColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.45f),
+                    strokeWidth = 2f,
+                )
+            }
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                ),
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Text(
+                        mapState.label ?: "Current place",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    mapState.fullAddress?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun CurrentLocationCard(
-    resolved: ResolvedPlaceDebug,
+private fun HomeModeToggle(
+    selectedMode: OperatingMode,
+    onSelectMode: (OperatingMode) -> Unit,
 ) {
-    val placeContext = resolved.placeContext
-    val updated = remember(resolved.updatedAt) {
-        timestampFormatter.format(resolved.updatedAt.atZone(ZoneId.systemDefault()))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            modifier = Modifier.testTag(UiTags.HomeModeLive),
+            selected = selectedMode == OperatingMode.LIVE,
+            onClick = { onSelectMode(OperatingMode.LIVE) },
+            label = { Text("Live") },
+        )
+        FilterChip(
+            modifier = Modifier.testTag(UiTags.HomeModePopups),
+            selected = selectedMode == OperatingMode.POPUPS,
+            onClick = { onSelectMode(OperatingMode.POPUPS) },
+            label = { Text("Popups") },
+        )
     }
+}
 
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        ),
+@Composable
+private fun ManualInsightFab(
+    isGenerating: Boolean,
+    hasPermission: Boolean,
+    onGenerate: () -> Unit,
+) {
+    ExtendedFloatingActionButton(
+        modifier = Modifier.testTag(UiTags.HomeGenerateInsightButton),
+        onClick = onGenerate,
+        expanded = true,
+        icon = {
+            Icon(
+                Icons.Rounded.MyLocation,
+                contentDescription = null,
+            )
+        },
+        text = {
+            Text(
+                when {
+                    isGenerating -> "Generating..."
+                    hasPermission -> "Get insight here"
+                    else -> "Grant location and get insight"
+                },
+            )
+        },
+    )
+}
+
+@Composable
+private fun LatestInsightSheet(
+    insight: InsightRecord,
+    isNarrating: Boolean,
+    onDismiss: () -> Unit,
+    onToggleNarration: () -> Unit,
+    onOpenDetail: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(UiTags.HomeInsightSheet),
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.32f))
+                .clickable(onClick = onDismiss, indication = null, interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }),
+        )
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .fillMaxHeight(0.86f),
+            shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+            tonalElevation = 8.dp,
         ) {
-            Text("Current location", style = MaterialTheme.typography.titleMedium)
-            Text(
-                "${formatCoordinate(placeContext.latitude)}, ${formatCoordinate(placeContext.longitude)}",
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
-                listOfNotNull(
-                    placeContext.areaName,
-                    placeContext.locality,
-                    placeContext.countryName,
-                ).joinToString(),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            placeContext.fullAddress?.let { fullAddress ->
-                Text(
-                    fullAddress,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp, vertical = 8.dp)
+                    .padding(bottom = 24.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(top = 8.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.18f),
+                            shape = RoundedCornerShape(999.dp),
+                        )
+                        .fillMaxWidth(0.18f)
+                        .height(4.dp),
+                )
+                Text("Latest insight", style = MaterialTheme.typography.labelLarge)
+                InsightCard(
+                    insight = insight,
+                    isNarrating = isNarrating,
+                    onToggleNarration = onToggleNarration,
+                    onOpenDetail = onOpenDetail,
                 )
             }
-            Text(
-                "Last updated $updated",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer,
-            )
+        }
+    }
+}
+
+@Composable
+private fun DiagnosticsSheet(
+    resolved: ResolvedPlaceDebug?,
+    onDismiss: () -> Unit,
+) {
+    ModalBottomSheet(
+        modifier = Modifier.testTag(UiTags.HomeDiagnosticsSheet),
+        onDismissRequest = onDismiss,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Text("Diagnostics", style = MaterialTheme.typography.headlineSmall)
+            if (resolved == null) {
+                Text(
+                    "Current resolved place is unavailable right now.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            } else {
+                val placeContext = resolved.placeContext
+                val updated = remember(resolved.updatedAt) {
+                    timestampFormatter.format(resolved.updatedAt.atZone(ZoneId.systemDefault()))
+                }
+                MetadataRow(
+                    "Coordinates",
+                    "${formatCoordinate(placeContext.latitude)}, ${formatCoordinate(placeContext.longitude)}",
+                )
+                MetadataRow(
+                    "Resolved place",
+                    listOfNotNull(
+                        placeContext.areaName,
+                        placeContext.locality,
+                        placeContext.countryName,
+                    ).joinToString(),
+                )
+                MetadataRow("Full address", placeContext.fullAddress ?: "Unavailable")
+                placeContext.sourceName?.let { MetadataRow("Place source", it) }
+                MetadataRow("Last updated", updated)
+            }
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
         }
     }
 }

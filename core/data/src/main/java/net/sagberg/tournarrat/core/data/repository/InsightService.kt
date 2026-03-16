@@ -13,6 +13,7 @@ import net.sagberg.tournarrat.core.model.AiProvider
 import net.sagberg.tournarrat.core.model.InsightGenerationMetadata
 import net.sagberg.tournarrat.core.model.InsightRecord
 import net.sagberg.tournarrat.core.model.InsightRequest
+import net.sagberg.tournarrat.core.model.PlaceContext
 
 class InsightService(
     private val preferencesRepository: PreferencesRepository,
@@ -22,12 +23,19 @@ class InsightService(
     private val openAiClient: OpenAiClient,
     private val demoAiClient: DemoAiClient,
 ) {
-    suspend fun generateInsightHere(): Result<InsightRecord> {
-        val preferences = preferencesRepository.preferences.first()
+    suspend fun resolveCurrentPlace(): Result<PlaceContext> {
         val location = currentLocationProvider.getCurrentLocation()
             .getOrElse { return Result.failure(it) }
 
-        val placeContext = placeContextProvider.resolve(location)
+        return runCatching {
+            placeContextProvider.resolve(location)
+        }
+    }
+
+    suspend fun generateInsightHere(): Result<InsightRecord> {
+        val preferences = preferencesRepository.preferences.first()
+        val placeContext = resolveCurrentPlace()
+            .getOrElse { return Result.failure(it) }
         val client: AiClient = when (preferences.aiProvider) {
             AiProvider.OPEN_AI -> openAiClient
             AiProvider.DEMO -> demoAiClient

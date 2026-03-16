@@ -55,6 +55,7 @@ class GeocoderPlaceContextProvider(
             longitude = location.longitude,
             areaName = areaName,
             fullAddress = address?.getAddressLine(0)?.trim()?.ifBlank { null } ?: streetHint,
+            sourceName = "Android geocoder",
             locality = address?.locality ?: address?.subAdminArea,
             countryName = address?.countryName,
             hints = hints,
@@ -196,6 +197,7 @@ class GooglePlacesContextProvider(
             areaName = placeNames.firstOrNull() ?: fallbackContext.areaName,
             fullAddress = places.firstNotNullOfOrNull { it.formattedAddress?.trim()?.ifBlank { null } }
                 ?: fallbackContext.fullAddress,
+            sourceName = if (places.isNotEmpty()) "Google Places" else fallbackContext.sourceName,
             hints = mergedHints,
         )
     }

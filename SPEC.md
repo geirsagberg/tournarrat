@@ -119,6 +119,7 @@ Requirements:
 - App stores the key securely on-device.
 - App can support multiple AI providers behind a common interface.
 - App should also support a separately configured Google Maps Platform key for nearby place enrichment.
+- App should support an app-owned Google Maps SDK key for the embedded home-screen map, separate from any user-supplied Google Places key.
 - Prompts should request concise, factual, non-hallucinatory outputs with uncertainty acknowledged when needed.
 - Outputs should be structured enough for UI rendering, narration, and local history review.
 - The first native OpenAI integration should use the modern Responses API rather than legacy chat completions.
@@ -144,8 +145,8 @@ AI responsibility boundary:
 ### 5. User Experience
 
 Primary surfaces:
-- Home screen with current area, latest insight, and quick actions.
-- Home screen with current resolved-location diagnostics for testing, including coordinates, geocoded place label, and last update time.
+- Home screen built around a full-screen map, a top-bar mode toggle, a primary on-demand insight action, and the latest insight in a bottom sheet.
+- Home screen diagnostics should be hidden by default and exposed through an overflow action rather than occupying the main surface.
 - Feed/history screen showing recent place-based insights.
 - Detail screen for one insight, including replayable narration and generation metadata.
 - Detail screen should also expose a metadata view showing the generation-time tone, interests, custom prompt, and confidence note used for that insight.
@@ -154,7 +155,6 @@ Primary surfaces:
 
 Operating modes:
 - `Live` mode:
-  - intended for walking with earphones connected
   - delivers spoken insights as the user reaches meaningful new places
   - should avoid rapid back-to-back narration
   - should favor shorter, more conversational insight formats
@@ -162,6 +162,15 @@ Operating modes:
   - delivers asynchronous notifications when the user reaches an interesting place
   - user opens the notification to read or listen later
   - should work well even when no audio device is connected
+
+Home screen rules:
+- The embedded map should be the primary full-screen canvas of Home.
+- The map should center on the latest resolved/current place and show a single "you are here" marker.
+- If no map key or current place is available, Home should show a graceful fallback state instead of a broken map.
+- Manual insight should be the primary explicit action on Home and should be presented as a floating action button over the map.
+- The current mode should be switchable from the Home top bar without leaving the screen.
+- The latest generated insight should appear in a bottom sheet that can be dismissed and reopened.
+- Diagnostics should include coordinates, resolved place label, full address, last updated time, and place source/provider when available.
 
 Notification behavior:
 - Occasional, high-signal notifications only.
@@ -358,7 +367,7 @@ Key interfaces:
 
 Responsibility split:
 - deterministic services should handle location change detection, place lookup, deduplication, and delivery gating
-- AI services should handle ranking assistance, insight generation, wording, and follow-up responses
+- AI services should handle ranking assistance, insight generation, and wording
 
 Recommended module split:
 - `app`
@@ -388,7 +397,7 @@ This can be simplified early if needed, but the boundaries should remain clear.
 
 ### Dependency Injection
 
-- Use a modern DI approach such as Hilt unless the codebase later has a strong reason to choose otherwise.
+- Use Koin for dependency injection to keep wiring straightforward under the current AGP 9 setup.
 
 ## Domain Model
 
@@ -444,6 +453,7 @@ Initial entities:
 - Live mode should be quieter than a human tour guide and should allow long silent stretches.
 - If background permission is denied, foreground/manual use should still be useful.
 - The app should still provide value when opened manually, even without background permission.
+- Home should prioritize place awareness and on-demand insight generation over diagnostics or configuration details.
 
 ## Failure Handling
 

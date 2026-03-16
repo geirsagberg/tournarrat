@@ -5,6 +5,7 @@ import android.location.Location
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
@@ -14,6 +15,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.rule.GrantPermissionRule
 import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import net.sagberg.tournarrat.core.data.di.coreDataModule
 import net.sagberg.tournarrat.core.data.location.CurrentLocationProvider
@@ -93,12 +95,32 @@ abstract class BaseSmokeTest {
         }
 
         composeRule.onNodeWithTag(UiTags.HomeScreen).assertIsDisplayed()
+        composeRule.onNodeWithTag(UiTags.HomeMapHero).assertIsDisplayed()
+        composeRule.waitUntil(5.seconds.inWholeMilliseconds) {
+            composeRule.onAllNodesWithText("Test District").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onAllNodesWithTag(UiTags.HomeDiagnosticsSheet).assertCountEquals(0)
+        composeRule.onNodeWithTag(UiTags.HomeModePopups).assertIsSelected()
+        composeRule.onNodeWithTag(UiTags.HomeOverflowButton).performClick()
+        composeRule.onNodeWithTag(UiTags.HomeDiagnosticsMenuItem).performClick()
+        composeRule.onNodeWithTag(UiTags.HomeDiagnosticsSheet).assertIsDisplayed()
+        composeRule.onNodeWithText("Resolved place").assertIsDisplayed()
+        composeRule.onNodeWithText("Fake place provider").assertIsDisplayed()
+        composeRule.onNodeWithText("Close").performClick()
+        composeRule.waitUntil(5.seconds.inWholeMilliseconds) {
+            composeRule.onAllNodesWithTag(UiTags.HomeDiagnosticsSheet).fetchSemanticsNodes().isEmpty()
+        }
+        composeRule.onNodeWithTag(UiTags.HomeModeLive).performClick()
+        composeRule.onNodeWithTag(UiTags.HomeModeLive).assertIsSelected()
         composeRule.onNodeWithTag(UiTags.HomeGenerateInsightButton).assertIsDisplayed()
         composeRule.onNodeWithTag(UiTags.HomeGenerateInsightButton).performClick()
 
         composeRule.waitUntil(20.seconds.inWholeMilliseconds) {
-            composeRule.onAllNodesWithTag(UiTags.InsightCard).fetchSemanticsNodes().isNotEmpty()
+            runBlocking {
+                GlobalContext.get().get<InsightHistoryRepository>().history.first().isNotEmpty()
+            }
         }
+        composeRule.onNodeWithTag(UiTags.HomeInsightSheet).assertIsDisplayed()
 
         if (expectDemoFallback) {
             composeRule.onNodeWithText("A quick read on Test District").assertIsDisplayed()
@@ -109,7 +131,7 @@ abstract class BaseSmokeTest {
             composeRule.onNodeWithText("Test District").assertIsDisplayed()
         }
 
-        composeRule.onNodeWithTag(UiTags.InsightOpenDetailButton).performScrollTo().performClick()
+        composeRule.onNodeWithTag(UiTags.InsightOpenDetailButton).performClick()
         composeRule.waitUntil(5.seconds.inWholeMilliseconds) {
             composeRule.onAllNodesWithTag(UiTags.DetailScreen).fetchSemanticsNodes().isNotEmpty()
         }
@@ -149,6 +171,7 @@ internal class FakePlaceContextProvider : PlaceContextProvider {
             longitude = location.longitude,
             areaName = "Test District",
             fullAddress = "Stephansplatz 1, 1010 Vienna, Austria",
+            sourceName = "Fake place provider",
             locality = "Vienna",
             countryName = "Austria",
             hints = listOf("Stephansplatz", "Old Town"),
